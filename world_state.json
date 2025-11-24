@@ -6,21 +6,20 @@
         "max_hp": 20,
         "inventory": [
             "Old Map",
-            "Dagger",
-            "Empty Potion Bottle"
+            "Dagger"
         ]
     },
     "current_location_id": "loc_tavern",
     "world_flags": {
-        "tavern_brawl_started": false,
+        "tavern_brawl_started": true,
         "mysterious_stranger_met": false
     },
     "npcs": {
         "barkeep": {
             "name": "Grum",
             "location_id": "loc_tavern",
-            "status": "alive",
-            "attitude": "friendly"
+            "status": "unconscious",
+            "attitude": "hostile"
         },
         "bandit_leader": {
             "name": "Red Eye",
