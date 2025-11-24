@@ -1,0 +1,32 @@
+{
+    "session_id": "game_01",
+    "player": {
+        "name": "Traveler",
+        "hp": 25,
+        "max_hp": 20,
+        "inventory": [
+            "Old Map",
+            "Dagger",
+            "Empty Potion Bottle"
+        ]
+    },
+    "current_location_id": "loc_tavern",
+    "world_flags": {
+        "tavern_brawl_started": false,
+        "mysterious_stranger_met": false
+    },
+    "npcs": {
+        "barkeep": {
+            "name": "Grum",
+            "location_id": "loc_tavern",
+            "status": "alive",
+            "attitude": "friendly"
+        },
+        "bandit_leader": {
+            "name": "Red Eye",
+            "location_id": "loc_forest",
+            "status": "alive",
+            "attitude": "hostile"
+        }
+    }
+}
