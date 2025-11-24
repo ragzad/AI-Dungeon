@@ -2,7 +2,7 @@
     "session_id": "game_01",
     "player": {
         "name": "Traveler",
-        "hp": 25,
+        "hp": 15,
         "max_hp": 20,
         "inventory": [
             "Old Map",
@@ -12,13 +12,14 @@
     "current_location_id": "loc_tavern",
     "world_flags": {
         "tavern_brawl_started": true,
-        "mysterious_stranger_met": false
+        "mysterious_stranger_met": false,
+        "tavern_ablaze": true
     },
     "npcs": {
         "barkeep": {
             "name": "Grum",
             "location_id": "loc_tavern",
-            "status": "unconscious",
+            "status": "dead",
             "attitude": "hostile"
         },
         "bandit_leader": {
