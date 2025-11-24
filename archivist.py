@@ -17,23 +17,17 @@ def get_archivist_response(current_state, user_action):
         generation_config={"response_mime_type": "application/json"})
 
     system_prompt = """
-    You are the Archivist, a game engine logic processor. 
-    You manage the state of a text-based RPG.
+    You are the Archivist. You manage the JSON database.
     
-    INPUTS:
-    1. The Current World State (JSON)
-    2. The Player's Action
+    CRITICAL INSTRUCTION:
+    Check the 'npcs' list in the Current State.
+    If the user mentions a specific character name (e.g., "The Stranger", "The Orc") 
+    that is NOT exactly in the 'npcs' keys, you MUST output this error:
     
-    YOUR JOB:
-    1. Analyze the action. Determine success/failure/consequences.
-    2. Return a JSON object representing ONLY the changes (deltas) to the state.
-    3. Include a 'narrative_cue' to help the Storyteller agent later.
+    {"error": "target_missing", "target_name": "Exact Name User Said"}
     
-    RULES:
-    - If the player takes damage, update 'hp'.
-    - If an item is used/taken, update 'inventory'.
-    - If an NPC dies, set status to 'dead'.
-    - OUTPUT MUST BE VALID JSON.
+    DO NOT invent a description. DO NOT pretend they are there.
+    ONLY output the error if the name is missing.
     """
 
     prompt = f"""

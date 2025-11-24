@@ -2,7 +2,7 @@
     "session_id": "game_01",
     "player": {
         "name": "Traveler",
-        "hp": 15,
+        "hp": 12,
         "max_hp": 20,
         "inventory": [
             "Old Map",
@@ -27,6 +27,15 @@
             "location_id": "loc_forest",
             "status": "alive",
             "attitude": "hostile"
+        },
+        "generated_npc_the_village_elder": {
+            "name": "the village elder",
+            "location_id": "loc_tavern",
+            "status": "alive",
+            "attitude": "neutral",
+            "hp": 20,
+            "max_hp": 20,
+            "description": "An old man with a weathered face and a long, white beard, he sips slowly at a tankard of ale, his eyes observing the tavern's patrons with a quiet wisdom, seemingly lost in thought."
         }
     }
 }
