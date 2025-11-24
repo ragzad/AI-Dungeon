@@ -2,40 +2,40 @@
     "session_id": "game_01",
     "player": {
         "name": "Traveler",
-        "hp": 12,
+        "hp": 20,
         "max_hp": 20,
         "inventory": [
             "Old Map",
             "Dagger"
         ]
     },
-    "current_location_id": "loc_tavern",
+    "current_location_id": "generated_loc_outside",
     "world_flags": {
-        "tavern_brawl_started": true,
-        "mysterious_stranger_met": false,
-        "tavern_ablaze": true
+        "game_started": true
+    },
+    "locations": {
+        "loc_tavern": {
+            "name": "The Rusty Tankard",
+            "description": "A dim, smoky tavern smelling of stale ale and sawdust. Locals whisper in hushed tones.",
+            "exits": [
+                "north",
+                "outside"
+            ]
+        },
+        "generated_loc_outside": {
+            "name": "outside",
+            "description": "The fresh night air, crisp and cool, greets you as you step out of the warm tavern. The faint glow of street lamps illuminates a cobbled path, leading into the unknown.",
+            "exits": [
+                "loc_tavern"
+            ]
+        }
     },
     "npcs": {
         "barkeep": {
             "name": "Grum",
             "location_id": "loc_tavern",
-            "status": "dead",
-            "attitude": "hostile"
-        },
-        "bandit_leader": {
-            "name": "Red Eye",
-            "location_id": "loc_forest",
             "status": "alive",
-            "attitude": "hostile"
-        },
-        "generated_npc_the_village_elder": {
-            "name": "the village elder",
-            "location_id": "loc_tavern",
-            "status": "alive",
-            "attitude": "neutral",
-            "hp": 20,
-            "max_hp": 20,
-            "description": "An old man with a weathered face and a long, white beard, he sips slowly at a tankard of ale, his eyes observing the tavern's patrons with a quiet wisdom, seemingly lost in thought."
+            "attitude": "neutral"
         }
     }
 }

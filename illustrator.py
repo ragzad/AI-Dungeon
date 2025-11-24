@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 # We use the Pro model for good prompt engineering
-MODEL_NAME = 'models/gemini-2.5-pro' 
+MODEL_NAME = 'models/gemini-2.5-flash' 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def get_image_prompt(narrative_text):

@@ -4,30 +4,34 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from utils import load_game, save_game
 
-# Load environment variables
 load_dotenv()
+# Make sure you are using a model name that worked for you previously
+model_name = 'models/gemini-2.5-flash' 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def get_archivist_response(current_state, user_action):
-    """
-    Sends state + action to Gemini Flash and gets a JSON update back.
-    """
-    # We use Gemini 2.5 Flash for speed and logic
-    model = genai.GenerativeModel('gemini-2.5-flash',
+    model = genai.GenerativeModel(model_name,
         generation_config={"response_mime_type": "application/json"})
 
     system_prompt = """
-    You are the Archivist. You manage the JSON database.
+    You are the Archivist. You manage the Game State.
     
-    CRITICAL INSTRUCTION:
-    Check the 'npcs' list in the Current State.
-    If the user mentions a specific character name (e.g., "The Stranger", "The Orc") 
-    that is NOT exactly in the 'npcs' keys, you MUST output this error:
+    INPUTS:
+    1. Current State (JSON)
+    2. Player Action
     
-    {"error": "target_missing", "target_name": "Exact Name User Said"}
+    CRITICAL INSTRUCTION - MISSING TARGETS:
+    If the user interacts with an NPC, Item, or Location that is NOT in the 'Current State' JSON:
+    1. You MUST return {"error": "target_missing"}
+    2. You MUST include the "target_name" field.
     
-    DO NOT invent a description. DO NOT pretend they are there.
-    ONLY output the error if the name is missing.
+    CORRECT ERROR FORMAT:
+    {"error": "target_missing", "target_name": "Steve"}
+    
+    INCORRECT FORMAT (DO NOT DO THIS):
+    {"error": "target_missing"}  <-- This causes a crash!
+    
+    If no error, return normal updates with "narrative_cue".
     """
 
     prompt = f"""
@@ -45,7 +49,7 @@ def get_archivist_response(current_state, user_action):
     try:
         return json.loads(response.text)
     except json.JSONDecodeError:
-        return {"error": "Failed to parse JSON from AI", "raw": response.text}
+        return {"narrative_cue": "The world reacts silently."}
 
 def update_world_state(updates):
     """

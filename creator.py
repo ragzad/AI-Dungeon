@@ -9,19 +9,20 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def create_new_entity(target_name, current_location):
     """
-    Generates a new NPC or Item that fits the current world context.
+    Generates a new NPC, Item, OR Location.
     """
     model = genai.GenerativeModel(MODEL_NAME, 
         generation_config={"response_mime_type": "application/json"})
 
     prompt = f"""
-    You are the World Forger. The player is trying to interact with '{target_name}', but it does not exist in the database.
+    You are the World Forger. 
+    The player is trying to interact with or go to '{target_name}', but it does not exist in the database.
+    
+    CONTEXT:
+    - Player is currently at: {current_location}
     
     YOUR JOB:
-    Create a JSON object for this new entity. 
-    - Context: The player is currently at '{current_location}'.
-    - If it sounds like a character, create an NPC.
-    - If it sounds like an object, create an Item.
+    Determine if '{target_name}' is a Person (NPC), an Item, or a Place (Location).
     
     OUTPUT SCHEMA (Choose one):
     
@@ -34,9 +35,8 @@ def create_new_entity(target_name, current_location):
         "location_id": "{current_location}",
         "status": "alive",
         "attitude": "neutral",
-        "hp": 20,
-        "max_hp": 20,
-        "description": "A generated description of the entity."
+        "hp": 20, "max_hp": 20,
+        "description": "Brief visual description."
       }}
     }}
     
@@ -44,7 +44,18 @@ def create_new_entity(target_name, current_location):
     {{
       "type": "item",
       "item_name": "{target_name}",
-      "description": "A generated description of the item."
+      "description": "Brief description."
+    }}
+    
+    OPTION C (Location):
+    {{
+      "type": "location",
+      "id": "generated_loc_{target_name.lower().replace(' ', '_')}",
+      "data": {{
+        "name": "{target_name}",
+        "description": "Atmospheric description of this new place.",
+        "exits": ["back to {current_location}"]
+      }}
     }}
     """
     

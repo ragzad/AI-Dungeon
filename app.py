@@ -4,6 +4,7 @@ from utils import load_game, save_game
 from archivist import get_archivist_response, update_world_state
 from narrator import narrate_scene
 from illustrator import get_image_prompt
+import base64
 
 # --- UI CONFIGURATION ---
 st.set_page_config(page_title="The Dungeon Master", layout="wide")
@@ -34,6 +35,27 @@ if current_state:
     for item in player['inventory']:
         st.sidebar.code(item)
     
+    # --- PHASE 2: THE CARTOGRAPHER (Dynamic Map) ---
+    st.sidebar.subheader("🗺️ World Map")
+    if "locations" in current_state:
+        try:
+            import graphviz
+            graph = graphviz.Digraph()
+            graph.attr(rankdir='LR', size='10', bgcolor='transparent')
+            
+            # Loop through all known locations
+            for loc_id, loc_data in current_state["locations"].items():
+                # Color the current location RED
+                if loc_id == current_state.get("current_location_id"):
+                    graph.node(loc_id, label=loc_data["name"], style='filled', fillcolor='#ffcccc', shape='box')
+                else:
+                    graph.node(loc_id, label=loc_data["name"], shape='ellipse', style='filled', fillcolor='#f0f2f6')
+            
+            st.sidebar.graphviz_chart(graph)
+        except ImportError:
+            st.sidebar.warning("Install 'graphviz' to see the map.")
+    # -----------------------------------------------
+
     # Display World Flags
     with st.sidebar.expander("🌍 World Flags"):
         st.sidebar.json(current_state['world_flags'])
@@ -53,12 +75,12 @@ if "messages" not in st.session_state:
 # --- HISTORY LOOP ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        # 1. Show Logic Logs (if they exist)
+        # 1. Show Logic Logs
         if "debug_log" in message:
             with st.expander("🤖 Archivist Logic (Debug)"):
                 st.json(message["debug_log"])
         
-        # 2. Show Art (if it exists)
+        # 2. Show Art
         if "art_prompt" in message and message["art_prompt"]:
             with st.expander("🎨 Illustrator's Vision"):
                 st.write(f"*{message['art_prompt']}*")
@@ -78,7 +100,10 @@ if prompt := st.chat_input("What is your command?"):
         
         # CHECK: Did the Archivist fail to find the target?
         if "error" in updates and updates["error"] == "target_missing":
-            missing_name = updates["target_name"]
+            # --- FIX: DEFENSIVE CODING ---
+            # If the AI forgets 'target_name', guess it from the prompt or use a placeholder
+            missing_name = updates.get("target_name", "Unknown Entity")
+            # -----------------------------
             
             # TRIGGER THE CREATOR
             with st.spinner(f"⚠️ Entity '{missing_name}' not found. Spawning it now..."):
@@ -96,12 +121,25 @@ if prompt := st.chat_input("What is your command?"):
                         st.toast(f"✨ Created new NPC: {missing_name}!")
                         
                     elif new_entity["type"] == "item":
-                        # Add to inventory or world 
                         current_state["player"]["inventory"].append(new_entity["item_name"])
                         st.toast(f"✨ Created new Item: {missing_name}!")
+
+                    # --- PHASE 1: THE WORLD FORGER (Location Gen) ---
+                    elif new_entity["type"] == "location":
+                        loc_id = new_entity["id"]
+                        # Ensure locations dict exists
+                        if "locations" not in current_state:
+                            current_state["locations"] = {}
+                        
+                        # Add new location
+                        current_state["locations"][loc_id] = new_entity["data"]
+                        # Teleport Player
+                        current_state["current_location_id"] = loc_id
+                        
+                        st.toast(f"✨ Discovered new Area: {missing_name}!")
+                    # ------------------------------------------------
                     
                     # --- CRITICAL FIX: SAVE TO DISK NOW ---
-                    # We must save the new entity to the file BEFORE the Archivist runs again.
                     save_game(current_state)
                     # --------------------------------------
                     
@@ -131,13 +169,41 @@ if prompt := st.chat_input("What is your command?"):
             st.image("https://placehold.co/600x300/222/FFF?text=Visual+Imagination+Active", caption="Scene Visualization Placeholder")
             
         st.markdown(story)
+
+# --- PHASE 3: THE BARD (Audio - CRASH PROOF VERSION) ---
+        try:
+            from gtts import gTTS
+            from io import BytesIO 
+            
+            if story:
+                # 1. Generate Audio into Memory
+                tts = gTTS(text=story, lang='en')
+                audio_bytes = BytesIO()
+                tts.write_to_fp(audio_bytes)
+                audio_bytes.seek(0)
+                
+                # 2. Convert to Base64 (Embeds it directly in HTML)
+                b64 = base64.b64encode(audio_bytes.read()).decode()
+                
+                # 3. Render HTML Audio Player
+                audio_html = f"""
+                    <audio controls autoplay>
+                    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+                    </audio>
+                """
+                st.markdown(audio_html, unsafe_allow_html=True)
+                
+        except Exception as e:
+            # If audio fails, we log it but DO NOT CRASH the app
+            print(f"Audio Error: {e}")
+        # ---------------------------------
     
     # 6. Save everything to history
     st.session_state.messages.append({
         "role": "assistant", 
         "content": story,
         "art_prompt": art_prompt,
-        "debug_log": updates  # <--- Saving the JSON here
+        "debug_log": updates
     })
     
     st.rerun()
