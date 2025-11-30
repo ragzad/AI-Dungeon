@@ -1,11 +1,10 @@
 {
-    "session_id": "game_01",
+    "session_id": "new_game",
     "player": {
         "name": "Traveler",
         "hp": 20,
         "max_hp": 20,
-        "inventory": [],
-        "current_location_id": "scribe_loc_tortuga's_pride"
+        "inventory": []
     },
     "current_location_id": "loc_start",
     "world_flags": {
@@ -13,180 +12,167 @@
     },
     "locations": {
         "loc_start": {
-            "name": "The Void",
-            "description": "Infinite potential.",
+            "name": "The Beginning",
+            "description": "You stand in a gray void. To form the world, you must take an action. Will you draw a sword? Check your revolver? Or look at the stars?",
             "exits": [
                 "forward",
-                "Naval Man-o'-War",
-                "Tortuga's Pride",
-                "The Serpent's Kiss"
+                "The Gray Void",
+                "The Unknown",
+                "the path 'forward'"
             ]
         },
-        "scribe_loc_naval_man-o'-war": {
-            "name": "Naval Man-o'-War",
-            "description": "A formidable ship with sails emblazoned with the stern crest of Captain 'Iron Will' Thorne.",
+        "scribe_loc_the_gray_void": {
+            "name": "The Gray Void",
+            "description": "a vast, featureless gray void, an endless, uniform expanse of soft, muted gray stretching into infinity",
             "exits": [
-                "Back to The Void"
+                "Back to The Beginning"
             ]
         },
-        "scribe_loc_tortuga's_pride": {
-            "name": "Tortuga's Pride",
-            "description": "The nearest port, a haven for all manner of rogues and revelers.",
+        "scribe_loc_the_unknown": {
+            "name": "The Unknown",
+            "description": "A shimmering, indeterminate expanse, a path pregnant with infinite possibilities.",
             "exits": [
-                "Back to The Void"
+                "Back to The Beginning"
             ]
         },
-        "scribe_loc_the_serpent's_kiss": {
-            "name": "The Serpent's Kiss",
-            "description": "Captain 'Ironhide' Kael's notorious vessel, a viper in the waves, always on the prowl",
+        "scribe_loc_the_path_'forward'": {
+            "name": "the path 'forward'",
+            "description": "A tendril of distinction, a whisper of a path in the endless sameness, solidifying to guide you.",
             "exits": [
-                "Back to The Void"
+                "Back to The Beginning"
             ]
         }
     },
-    "npcs": {
-        "scribe_npc_captain_'iron_will'_thorne": {
-            "name": "Captain 'Iron Will' Thorne",
-            "location_id": "loc_start",
-            "status": "alive",
-            "attitude": "unknown",
-            "description": "He's notoriously prejudiced, seeing any deviation from his rigid norms as a personal affront. He's here to stamp out what he considers 'immorality.'"
-        },
-        "scribe_npc_jax": {
-            "name": "Jax",
-            "location_id": "loc_start",
-            "status": "alive",
-            "attitude": "unknown",
-            "description": "A lean, tattooed shipmate, whose eyes, the color of a stormy sea, hold a mix of challenge and undeniable admiration."
-        },
-        "scribe_npc_silus": {
-            "name": "Silus",
-            "location_id": "loc_start",
-            "status": "alive",
-            "attitude": "unknown",
-            "description": "The fiery quartermaster, a master of blades and biting wit with a reputation for daring escapades and even more daring affections."
-        },
-        "scribe_npc_captain_'ironhide'_kael": {
-            "name": "Captain 'Ironhide' Kael",
-            "location_id": "loc_start",
-            "status": "alive",
-            "attitude": "unknown",
-            "description": "Notorious captain of 'The Serpent's Kiss'"
-        }
-    },
+    "npcs": {},
     "story_state": {
-        "genre": "Swashbuckling Adventure",
-        "narrative_direction": "The player is excited about sailing to Tortuga's Pride. Lean into the classic pirate voyage tropes: the salt spray, the creaking timbers, the distant horizon. Describe the bustling port as they prepare, or the open sea if they've already cast off. This is a journey with a clear destination driven by player enthusiasm. Focus on the thrill of the open sea and the allure of their chosen destination.",
-        "active_threat": "A notoriously swift and ruthless Pirate Hunter vessel, 'The Serpent's Kiss,' commanded by the relentless Captain 'Ironhide' Kael, has recently been sighted in these waters, known for capturing pirate crews and turning them over to the Crown for hefty bounties. They might appear on the horizon, or their reputation could precede them at Tortuga's Pride."
+        "current_act": 1,
+        "global_tension": 1,
+        "genre": "adaptive",
+        "current_objective": "Establish the setting.",
+        "narrative_direction": "The suffocating silence presses in further, intensifying the player's crushing despair."
     },
     "shadow_queue": [
         {
             "type": "location",
-            "name": "The Weave's Shimmering Threshold",
-            "description": "A pulsating tear in the fabric of the Void, radiating a gentle, inviting warmth and a soft, melodic hum. It seems to beckon, hinting at other realities or hidden truths.",
+            "name": "The Unending Void",
+            "description": "An infinite expanse of absolute nothingness, devoid of light, sound, or sensation. There are no up or down, no forwards or back\u2014only a profound, disorienting emptiness that stretches beyond all comprehension. It feels both vast and claustrophobic at once, shattering any semblance of prior comfort.",
             "keywords": [
-                "portal",
-                "gateway",
-                "anomaly",
-                "distortion",
-                "warmth",
-                "hum",
-                "passage",
-                "threshold",
                 "void",
-                "fantasy"
+                "nothingness",
+                "beginning",
+                "emptiness",
+                "disorientation",
+                "darkness",
+                "abyss",
+                "non-existence",
+                "zero"
             ]
         },
         {
             "type": "item",
-            "name": "Heartstone of the Unravelled",
-            "description": "Nestled at the heart of the distortion, a large, multifaceted gem pulses with an inner light, emitting the rhythmic hum and the unusual warmth. It feels like a fragment of creation itself, fallen into the Void.",
+            "name": "Echo of Self",
+            "description": "Not an object, but a persistent internal resonance. A faint, nagging sensation that 'you' exist, despite the complete lack of physical form or sensory input. It's the barest flicker of consciousness, a desperate anchor in the boundless non-existence, highlighting the immediate mystery of your own being.",
             "keywords": [
-                "artifact",
-                "gem",
-                "crystal",
-                "heartstone",
-                "warmth",
-                "hum",
-                "power",
-                "ancient",
-                "void",
-                "creation",
-                "fantasy"
+                "self",
+                "identity",
+                "existence",
+                "consciousness",
+                "echo",
+                "internal",
+                "perception",
+                "anchor",
+                "being",
+                "awareness"
             ]
         },
         {
             "type": "npc",
-            "name": "The Dream-Seer's Silhouette",
-            "description": "Within the shimmering distortion, a faint, humanoid silhouette flickers into brief focus. Its form is indistinct, but its presence feels incredibly ancient and perceptive, observing your every move from the veil.",
+            "name": "The Primordial Query",
+            "description": "A pervasive, voiceless thought that isn't your own, yet resonates deeply within your nascent consciousness. It isn't spoken, but felt: 'Why? What are you? Where is here?' It's the first ripple in the stillness of absolute non-existence, a fundamental question demanding an answer that simply does not exist within the void.",
             "keywords": [
+                "question",
+                "mystery",
+                "existence",
+                "origin",
+                "whisper",
+                "thought",
                 "entity",
-                "spirit",
-                "dreamer",
-                "seer",
-                "watcher",
-                "silhouette",
-                "ethereal",
+                "primordial",
+                "query",
+                "unknown"
+            ]
+        },
+        {
+            "type": "location",
+            "name": "The Winding Path",
+            "description": "A narrow, overgrown trail disappears into a mist-shrouded distance. The air here hums with the promise of journey.",
+            "keywords": [
+                "location",
+                "path",
+                "forward",
+                "journey",
+                "unknown",
+                "mist",
+                "adventure",
+                "beginning",
+                "exploration"
+            ]
+        },
+        {
+            "type": "location",
+            "name": "The Gray Abyss",
+            "description": "An impossibly deep chasm, its depths obscured by a shifting, light-absorbing gray mist. A profound silence emanates from it.",
+            "keywords": [
+                "location",
                 "void",
-                "ancient",
-                "mysterious",
-                "fantasy"
-            ]
-        },
-        {
-            "type": "npcs",
-            "name": "The Dream-Seer's Silhouette",
-            "description": "A colossal figure of shifting shadows and faint starlight materializes before you. Its eyes, burning with an ancient, knowing light, pierce through the void, fixing upon your very soul. It floats in unnerving silence, an enigma of intent, its presence demanding decipherment.",
-            "keywords": [
-                "dream-seer",
-                "silhouette",
-                "figure",
-                "gaze",
+                "gray",
+                "abyss",
+                "nothingness",
+                "silence",
+                "chasm",
                 "mystery",
-                "ancient",
-                "shadow",
-                "starlight",
-                "enigma",
-                "observer",
-                "watcher"
+                "choice",
+                "depth",
+                "unknown"
             ]
         },
         {
-            "type": "items",
-            "name": "The Pulsating Heartstone",
-            "description": "Just beyond the Dream-Seer's form, suspended in the void, a gemstone of impossible depths throbs with a soft, crimson light. It hums with a silent song, radiating a strange, almost magnetic warmth that hints at a power beyond comprehension\u2014the very mystery the Dream-Seer's gaze seems to guard or reveal.",
+            "type": "npc",
+            "name": "The Harbinger of Choices",
+            "description": "A spectral figure, neither male nor female, translucent and shimmering with the light of countless branching futures. It gestures towards two unseen paths.",
             "keywords": [
-                "heartstone",
-                "gemstone",
-                "pulsating",
-                "crimson",
-                "light",
-                "power",
-                "mystery",
-                "warmth",
-                "song",
-                "artifact",
-                "relic",
-                "source"
-            ]
-        },
-        {
-            "type": "locations",
-            "name": "Whispers of Fragmented Truths",
-            "description": "Around you, the Void shimmers with ethereal motes of light, coalescing into fleeting images and murmurs. These are the spectral echoes of forgotten truths, fragmented memories of worlds and beings long vanished. They drift tantalizingly close, offering glimpses of context or revelation if one can grasp their ephemeral essence.",
-            "keywords": [
-                "whispers",
-                "fragments",
-                "truths",
-                "memories",
-                "echoes",
+                "npc",
+                "harbinger",
+                "spectral",
+                "choices",
+                "decision",
+                "guide",
+                "future",
+                "beginning",
                 "void",
-                "past",
-                "revelation",
-                "ethereal",
-                "glimpses",
-                "knowledge"
+                "forward",
+                "entity",
+                "mystery"
+            ]
+        },
+        {
+            "type": "item",
+            "name": "A Simple Satchel",
+            "description": "A sturdy, if plain, leather satchel. It feels light, yet surprisingly resilient, ready to carry whatever tools a new journey might demand.",
+            "keywords": [
+                "item",
+                "satchel",
+                "bag",
+                "container",
+                "journey",
+                "adventure",
+                "tool",
+                "beginning",
+                "storage",
+                "forward",
+                "preparation"
             ]
         }
-    ]
+    ],
+    "world_events": []
 }
