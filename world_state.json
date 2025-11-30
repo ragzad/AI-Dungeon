@@ -9,7 +9,99 @@
             "Dagger"
         ]
     },
-    "current_location_id": "generated_loc_the_outside",
+    "shadow_queue": [
+        {
+            "type": "location",
+            "keywords": [
+                "crumbling",
+                "path",
+                "evasion",
+                "obstacle",
+                "precarious"
+            ],
+            "id": "gen_crumbling_overpass_01",
+            "location_name": "Crumbling Overpass",
+            "data": {
+                "description": "A precarious section of a forgotten elevated walkway, its ancient stones groaning under the strain. It offers a quicker path, but one wrong step could send you plummeting into the unseen depths below."
+            }
+        },
+        {
+            "type": "item",
+            "keywords": [
+                "discarded",
+                "clue",
+                "distraction",
+                "escape",
+                "contents"
+            ],
+            "id": "gen_dropped_satchel_01",
+            "item_name": "Discarded Satchel",
+            "data": {
+                "description": "A heavy, leather satchel, hastily abandoned near a narrow passage. It appears to have spilled some of its contents: a few faded, cryptic maps, a half-eaten, hard ration, and a peculiar, smooth black stone that hums faintly with an unsettling energy."
+            }
+        },
+        {
+            "type": "npc",
+            "keywords": [
+                "shadow",
+                "glimpse",
+                "unseen",
+                "pursuit",
+                "apparition"
+            ],
+            "id": "gen_flickering_shadow_01",
+            "data": {
+                "name": "Flickering Shadow Play",
+                "description": "For a split second, a movement at the absolute edge of your vision \u2013 not a solid shape, but an elongation of existing shadows, stretching and coiling unnaturally from the periphery before dissolving back into the oppressive gloom. Was it just the adrenaline, or something else observing your flight?"
+            }
+        },
+        {
+            "type": "npc",
+            "keywords": [
+                "scholar",
+                "hermit",
+                "watcher",
+                "ancient"
+            ],
+            "id": "gen_npc_elara_chronicler",
+            "data": {
+                "name": "Elara, The Watcher's Chronicler",
+                "description": "A gaunt figure, eyes wide with obsessive knowledge, muttering fragmented histories of the Silent Watcher. She seems more a part of the ancient place than a visitor, her clothes worn and covered in dust that seems as old as time itself."
+            }
+        },
+        {
+            "type": "item",
+            "keywords": [
+                "tablet",
+                "artifact",
+                "ancient",
+                "runes",
+                "secret"
+            ],
+            "id": "gen_item_obsidian_glyph_tablet",
+            "item_name": "Obsidian Glyph-Tablet",
+            "data": {
+                "description": "A heavy, polished obsidian tablet etched with strange, phosphorescent glyphs that seem to shift subtly in the low light. It hums faintly with an ancient, forgotten power.",
+                "effect": "Contains cryptic verses detailing the Watcher's purpose and a partial prophecy, requiring keen observation or magical deciphering to understand."
+            }
+        },
+        {
+            "type": "location",
+            "keywords": [
+                "chamber",
+                "sanctum",
+                "figure",
+                "hidden",
+                "recess"
+            ],
+            "id": "gen_loc_luminal_recess",
+            "data": {
+                "name": "The Luminal Recess",
+                "description": "A small, perfectly circular chamber carved deep within the Figure, its walls glowing with a soft, internal light that seems to emanate from the very stone. At its center, a pedestal holds a depression perfectly sized for an object yet to be found. The air here is still, heavy with unseen presence, and echoes with the faint, almost imperceptible hum of the Watcher itself."
+            }
+        }
+    ],
+    "current_location_id": "generated_loc_the_figure",
     "world_flags": {
         "game_started": true
     },
@@ -27,12 +119,39 @@
             "name": "The Moonlit Square",
             "description": "Stepping out from the warm, boisterous tavern, you find yourself bathed in the ethereal glow of the twin moons. The square, paved with ancient, uneven cobblestones, stretches before you. Flickering lanterns hang from the eaves of tall, timber-framed buildings, casting dancing shadows. The air is cool and carries the distant sounds of night life \u2013 a bard's lute, a merchant's distant shout, and the rustle of wind through unseen trees.",
             "exits": [
-                "back to loc_tavern"
+                "back to loc_tavern",
+                "The Whispering Corner"
             ],
             "suggested_exits": [
                 "The Grand Market",
                 "The Alchemist's Tower",
                 "Whispering Woods"
+            ]
+        },
+        "generated_loc_the_next_person": {
+            "name": "The Whispering Corner",
+            "description": "You step into a shadowed alcove tucked between two ancient, leaning buildings, the stone worn smooth by countless hands. The air here is thick with the scent of old parchment and a faint, sweet smoke, almost like burnt sugar. Huddled on a low, moss-covered stool is a figure draped in layers of dark, patched cloth, their face obscured by a wide-brimmed, tattered hat. A single, flickering lantern casts long, dancing shadows, making their silhouette seem to shift and sway with an unseen breeze. This is the source of the low, murmuring hum that drew you in \u2013 the next person, a purveyor of secrets and whispered truths, seemingly waiting just for you.",
+            "exits": [
+                "back to generated_loc_the_outside",
+                "The Figure (The Silent Watcher)"
+            ],
+            "suggested_exits": [
+                "The Obsidian Market",
+                "The Silent Library",
+                "The Moonlit Bridge"
+            ]
+        },
+        "generated_loc_the_figure": {
+            "name": "The Veiled Sanctuary",
+            "description": "The air here is thick with an ancient, resonant silence, broken only by the faint hum of unseen energies. Before you stands The Figure, a presence more felt than seen, its form perpetually shrouded in shifting shadows that seem to absorb the very light. The chamber itself is vast, its walls carved with intricate, pulsing glyphs that faintly illuminate the space. A single, obsidian pedestal rests near The Figure, hinting at rituals long forgotten or yet to come. The ground beneath your feet feels strangely warm, as if it breathes with a life of its own.",
+            "exits": [
+                "back to generated_loc_the_figure",
+                "The Veiled Sanctuary"
+            ],
+            "suggested_exits": [
+                "The Whispering Labyrinth",
+                "The Portal Nexus",
+                "The Echoing Chasm"
             ]
         }
     },
@@ -46,8 +165,8 @@
     },
     "story_state": {
         "current_act": 1,
-        "global_tension": 3,
-        "current_objective": "Investigate the inhabitants of The Moonlit Square.",
-        "narrative_direction": "Observational, investigative, with a touch of mystery regarding the square's true nature."
+        "global_tension": 7,
+        "current_objective": "Attempt to establish communication with The Figure.",
+        "narrative_direction": "Anticipatory, enigmatic, focusing on the potential for a direct, albeit mysterious, interaction and the unveiling of its silent presence."
     }
 }

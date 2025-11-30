@@ -8,7 +8,8 @@ from narrator import narrate_scene
 from illustrator import get_image_prompt
 from gtts import gTTS
 from io import BytesIO
-from director import update_story_state  # <--- IMPORT THE NEW AGENT
+from director import update_story_state 
+from dreamer import dream_up_content
 
 # --- UI CONFIGURATION ---
 st.set_page_config(page_title="The Dungeon Master", layout="wide")
@@ -37,7 +38,7 @@ if current_state:
     for item in player['inventory']:
         st.sidebar.code(item)
     
-    # --- NEW: DYNAMIC QUEST LOG ---
+    # --- DYNAMIC QUEST LOG ---
     st.sidebar.subheader("📜 Current Story")
     if "story_state" in current_state:
         story_data = current_state["story_state"]
@@ -45,7 +46,7 @@ if current_state:
         st.sidebar.write(f"**Tension:** {story_data.get('global_tension', 1)}/10")
         with st.sidebar.expander("Director's Notes"):
             st.write(f"*{story_data.get('narrative_direction')}*")
-    # ------------------------------
+    # -------------------------
 
     # Map
     st.sidebar.subheader("🗺️ World Map")
@@ -70,6 +71,9 @@ if current_state:
         st.sidebar.json(current_state['world_flags'])
     with st.sidebar.expander("👥 NPC Status"):
         st.sidebar.json(current_state['npcs'])
+    # Show Dreamer Queue
+    with st.sidebar.expander("☁️ Shadow Queue (Dreamer)"):
+        st.json(current_state.get("shadow_queue", []))
 
 # --- CHAT LOGIC ---
 
@@ -126,22 +130,37 @@ if prompt := st.chat_input("What is your command?"):
                 from creator import create_new_entity
                 curr_loc = current_state.get("current_location_id", "unknown")
                 
-                new_entity = create_new_entity(missing_name, curr_loc)
+                # Pass current_state so Creator can check the Dreamer's Shadow Queue
+                new_entity = create_new_entity(missing_name, curr_loc, current_state)
                 
                 if new_entity:
                     if new_entity["type"] == "location":
                         loc_id = new_entity["id"]
                         loc_data = new_entity["data"]
                         
+                        # --- FIX: Prevent Self-Looping Exits ---
+                        clean_exits = [e for e in loc_data.get("exits", []) 
+                                      if e.lower() != loc_data["name"].lower() 
+                                      and "back to" not in e.lower()]
+                        loc_data["exits"] = clean_exits
+                        # ---------------------------------------
+                        
                         if "locations" not in current_state: current_state["locations"] = {}
                         current_state["locations"][loc_id] = loc_data
                         
-                        # Link Exits
+                        # Link Exits (Old -> New)
                         old_loc_id = current_state["current_location_id"]
+                        old_loc_name = current_state["locations"].get(old_loc_id, {}).get("name", "Previous Area")
+                        
+                        # Force Back Link (New -> Old)
+                        loc_data["exits"].append(f"Back to {old_loc_name}")
+
                         if old_loc_id in current_state["locations"]:
                             if "exits" not in current_state["locations"][old_loc_id]:
                                 current_state["locations"][old_loc_id]["exits"] = []
-                            current_state["locations"][old_loc_id]["exits"].append(loc_data["name"])
+                            # Only add if not already there
+                            if loc_data["name"] not in current_state["locations"][old_loc_id]["exits"]:
+                                current_state["locations"][old_loc_id]["exits"].append(loc_data["name"])
 
                         current_state["current_location_id"] = loc_id
                         
@@ -170,11 +189,7 @@ if prompt := st.chat_input("What is your command?"):
 
     # --- THE DIRECTOR (ADAPTIVE STORY ENGINE) ---
     with st.spinner("The Director is adapting the plot..."):
-        # The Director looks at the PHYSICAL result (log_msg) and the USER INTENT (prompt)
-        # to decide where the story goes next.
         new_story_state = update_story_state(new_state, prompt, log_msg)
-        
-        # Save the Director's decisions to the state
         new_state["story_state"] = new_story_state
         save_game(new_state)
 
@@ -211,4 +226,18 @@ if prompt := st.chat_input("What is your command?"):
         "debug_log": updates
     })
     
+    # --- THE DREAMER (Background Generation) ---
+    with st.spinner("The Dreamer is imagining the future..."):
+        # This generates content for the NEXT turn based on the new Story State
+        new_dreams = dream_up_content(new_state)
+        
+        if new_dreams:
+            if "shadow_queue" not in new_state:
+                new_state["shadow_queue"] = []
+            
+            # Add new dreams to the pile
+            new_state["shadow_queue"].extend(new_dreams)
+            save_game(new_state)
+            
+    # --- RERUN ---
     st.rerun()
