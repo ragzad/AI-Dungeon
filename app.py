@@ -8,6 +8,7 @@ from narrator import narrate_scene
 from illustrator import get_image_prompt
 from gtts import gTTS
 from io import BytesIO
+from director import update_story_state  # <--- IMPORT THE NEW AGENT
 
 # --- UI CONFIGURATION ---
 st.set_page_config(page_title="The Dungeon Master", layout="wide")
@@ -36,6 +37,16 @@ if current_state:
     for item in player['inventory']:
         st.sidebar.code(item)
     
+    # --- NEW: DYNAMIC QUEST LOG ---
+    st.sidebar.subheader("📜 Current Story")
+    if "story_state" in current_state:
+        story_data = current_state["story_state"]
+        st.sidebar.info(f"**Goal:** {story_data.get('current_objective', 'Explore')}")
+        st.sidebar.write(f"**Tension:** {story_data.get('global_tension', 1)}/10")
+        with st.sidebar.expander("Director's Notes"):
+            st.write(f"*{story_data.get('narrative_direction')}*")
+    # ------------------------------
+
     # Map
     st.sidebar.subheader("🗺️ World Map")
     if "locations" in current_state:
@@ -69,7 +80,7 @@ if "messages" not in st.session_state:
         "content": "You stand in the dim light of The Rusty Tankard. The air smells of stale ale. What do you do?"
     })
 
-# --- HISTORY LOOP (FIXED TO SHOW AUDIO) ---
+# --- HISTORY LOOP ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         # 1. Debug Logs
@@ -85,8 +96,7 @@ for message in st.session_state.messages:
         # 3. Story Content
         st.markdown(message["content"])
 
-        # 4. AUDIO (THE FIX IS HERE)
-        # We now check history for audio data and render it
+        # 4. AUDIO
         if "audio_b64" in message and message["audio_b64"]:
             audio_html = f"""
                 <audio controls style="width: 100%;">
@@ -158,6 +168,16 @@ if prompt := st.chat_input("What is your command?"):
         log_msg = updates.get("narrative_cue", "Events unfold...")
         new_state = update_world_state(updates)
 
+    # --- THE DIRECTOR (ADAPTIVE STORY ENGINE) ---
+    with st.spinner("The Director is adapting the plot..."):
+        # The Director looks at the PHYSICAL result (log_msg) and the USER INTENT (prompt)
+        # to decide where the story goes next.
+        new_story_state = update_story_state(new_state, prompt, log_msg)
+        
+        # Save the Director's decisions to the state
+        new_state["story_state"] = new_story_state
+        save_game(new_state)
+
     # --- NARRATOR ---
     with st.spinner("The Narrator is writing..."):
         story = narrate_scene(new_state, prompt, log_msg)
@@ -170,7 +190,7 @@ if prompt := st.chat_input("What is your command?"):
              encoded_prompt = urllib.parse.quote(art_prompt)
              image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=512&model=flux&seed=42&nologo=true"
 
-    # --- AUDIO GENERATION (SAVE TO B64) ---
+    # --- AUDIO GENERATION ---
     audio_b64 = None
     if story:
         try:
@@ -183,14 +203,12 @@ if prompt := st.chat_input("What is your command?"):
             print(f"Audio Generation Error: {e}")
 
     # --- SAVE TO HISTORY ---
-    # We save BEFORE we rerun, so the History Loop picks it up
     st.session_state.messages.append({
         "role": "assistant", 
         "content": story,
         "art_url": image_url,
-        "audio_b64": audio_b64, # <--- Saving the Audio Data Here
+        "audio_b64": audio_b64, 
         "debug_log": updates
     })
     
-    # --- RERUN ---
     st.rerun()

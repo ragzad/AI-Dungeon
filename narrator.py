@@ -14,22 +14,28 @@ def narrate_scene(current_state, recent_action, archivist_log):
     """
     model = genai.GenerativeModel(MODEL_NAME)
 
-    system_prompt = """
+    story_state = current_state.get("story_state", {})
+    direction = story_state.get("narrative_direction", "Describe the scene.")
+    tension = story_state.get("global_tension", 1)
+
+    system_prompt = f"""
     You are the Dungeon Master. 
+    
+    VITAL INSTRUCTION:
+    You have received a SECRET NOTE from the Story Director:
+    "{direction}"
+    
+    You MUST steer the story in this direction while describing the scene.
+    
+    Current Tension Level: {tension}/10. (Adjust your writing style: 1 is relaxed, 10 is frantic/fast-paced).
     
     INPUTS:
     1. World State
-    2. Player Action (WHAT THE USER SAID)
-    3. Archivist Log (The Outcome)
+    2. Player Action
+    3. Archivist Log (Physical Events)
     
-    YOUR JOB:
-    Write the response to the player.
-    
-    RULES:
-    1. DIRECTLY RESPOND to the "Player Action". If they said "Hello", have an NPC say "Hello" back.
-    2. Do NOT just describe the room again. Advance the moment.
-    3. Keep it under 3 sentences.
-    4. Tone: Immersive, fantasy.
+    OUTPUT:
+    Immersive fantasy prose (Max 3-4 sentences).
     """
 
     prompt = f"""
