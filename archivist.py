@@ -20,18 +20,15 @@ def get_archivist_response(current_state, user_action):
     1. Current State (JSON)
     2. Player Action
     
-    CRITICAL INSTRUCTION - MISSING TARGETS:
-    If the user interacts with an NPC, Item, or Location that is NOT in the 'Current State' JSON:
-    1. You MUST return {"error": "target_missing"}
-    2. You MUST include the "target_name" field.
+    CRITICAL INSTRUCTION - MOVEMENT:
+    If the user tries to move to a location NOT in the 'locations' keys (e.g., "I go outside", "I leave", "I go to the shop"):
+    1. You MUST return {"error": "target_missing", "target_name": "The Name of the Place"}
+    2. If the user is vague (e.g., "I leave"), infer the target name (e.g., "The Outside").
     
-    CORRECT ERROR FORMAT:
-    {"error": "target_missing", "target_name": "Steve"}
+    CRITICAL INSTRUCTION - INTERACTION:
+    If the user interacts with an NPC/Item that is missing -> {"error": "target_missing", "target_name": "..."}
     
-    INCORRECT FORMAT (DO NOT DO THIS):
-    {"error": "target_missing"}  <-- This causes a crash!
-    
-    If no error, return normal updates with "narrative_cue".
+    Otherwise, return normal JSON updates with a "narrative_cue".
     """
 
     prompt = f"""

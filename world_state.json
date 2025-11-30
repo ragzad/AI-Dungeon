@@ -9,7 +9,7 @@
             "Dagger"
         ]
     },
-    "current_location_id": "generated_loc_outside",
+    "current_location_id": "generated_loc_the_outside",
     "world_flags": {
         "game_started": true
     },
@@ -19,14 +19,45 @@
             "description": "A dim, smoky tavern smelling of stale ale and sawdust. Locals whisper in hushed tones.",
             "exits": [
                 "north",
-                "outside"
+                "outside",
+                "The Gilded Sanctuary"
             ]
         },
-        "generated_loc_outside": {
-            "name": "outside",
-            "description": "The fresh night air, crisp and cool, greets you as you step out of the warm tavern. The faint glow of street lamps illuminates a cobbled path, leading into the unknown.",
+        "generated_loc_patron": {
+            "name": "The Gilded Sanctuary",
+            "description": "Dimly lit by ornate, flickering oil lamps, this private chamber is a haven of plush velvet and dark, polished wood. Rich tapestries depicting ancient, forgotten myths adorn the walls, and the air is thick with the scent of aged spirits and exotic pipeweed. A large, overstuffed armchair sits beside a crackling hearth, suggesting a powerful presence often holds court here, away from the boisterous clamor of the main tavern.",
             "exits": [
-                "loc_tavern"
+                "back to loc_tavern",
+                "The Gilded Vault of Bargains"
+            ],
+            "suggested_exits": [
+                "The Midnight Gallery",
+                "The Smuggler's Passage"
+            ]
+        },
+        "generated_loc_the_patron": {
+            "name": "The Gilded Vault of Bargains",
+            "description": "The air within The Gilded Vault is thick with the scent of aged parchment, exotic spices, and something subtly metallic \u2013 perhaps the lingering tang of blood, or coin. Towering shelves of polished dark wood, laden with enigmatic scrolls and forgotten artifacts, line walls shimmering with gold leaf. A colossal, intricate clockwork mechanism dominates the far wall, its gears turning with a soft, rhythmic hum that punctuates the silence. In the center, a plush, high-backed chair, seemingly carved from shadow, awaits, facing a low table scattered with intriguing, unidentifiable objects. This is clearly a place of immense power and dangerous allure.",
+            "exits": [
+                "back to generated_loc_patron",
+                "The Verdant Verge"
+            ],
+            "suggested_exits": [
+                "The Whispering Archives",
+                "The Crimson Bazaar",
+                "The Sunken Treasury"
+            ]
+        },
+        "generated_loc_the_outside": {
+            "name": "The Verdant Verge",
+            "description": "Stepping out from the enclosed grandeur of the Patron's domain, you are greeted by an expansive panorama of untamed wilderness. Rolling hills, cloaked in a riot of unfamiliar flora, stretch to a horizon hazy with a golden mist. The air is cool and carries the scent of damp earth and exotic blossoms, a stark contrast to the perfumed stillness within. Overhead, a sky of shifting, opalescent clouds drifts lazily, casting dappled light across ancient, gnarled trees whose branches twist like forgotten runes against the vastness. A faint, harmonious hum permeates the very ground, a symphony of unseen life.",
+            "exits": [
+                "back to generated_loc_the_patron"
+            ],
+            "suggested_exits": [
+                "The Whispering Copse",
+                "The Shimmering Falls",
+                "The Elder Road"
             ]
         }
     },
