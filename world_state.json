@@ -4,169 +4,189 @@
         "name": "Traveler",
         "hp": 20,
         "max_hp": 20,
-        "inventory": [
-            "Old Map",
-            "Dagger"
-        ]
+        "inventory": [],
+        "current_location_id": "scribe_loc_tortuga's_pride"
     },
-    "shadow_queue": [
-        {
-            "type": "location",
-            "keywords": [
-                "crumbling",
-                "path",
-                "evasion",
-                "obstacle",
-                "precarious"
-            ],
-            "id": "gen_crumbling_overpass_01",
-            "location_name": "Crumbling Overpass",
-            "data": {
-                "description": "A precarious section of a forgotten elevated walkway, its ancient stones groaning under the strain. It offers a quicker path, but one wrong step could send you plummeting into the unseen depths below."
-            }
-        },
-        {
-            "type": "item",
-            "keywords": [
-                "discarded",
-                "clue",
-                "distraction",
-                "escape",
-                "contents"
-            ],
-            "id": "gen_dropped_satchel_01",
-            "item_name": "Discarded Satchel",
-            "data": {
-                "description": "A heavy, leather satchel, hastily abandoned near a narrow passage. It appears to have spilled some of its contents: a few faded, cryptic maps, a half-eaten, hard ration, and a peculiar, smooth black stone that hums faintly with an unsettling energy."
-            }
-        },
-        {
-            "type": "npc",
-            "keywords": [
-                "shadow",
-                "glimpse",
-                "unseen",
-                "pursuit",
-                "apparition"
-            ],
-            "id": "gen_flickering_shadow_01",
-            "data": {
-                "name": "Flickering Shadow Play",
-                "description": "For a split second, a movement at the absolute edge of your vision \u2013 not a solid shape, but an elongation of existing shadows, stretching and coiling unnaturally from the periphery before dissolving back into the oppressive gloom. Was it just the adrenaline, or something else observing your flight?"
-            }
-        },
-        {
-            "type": "npc",
-            "keywords": [
-                "scholar",
-                "hermit",
-                "watcher",
-                "ancient"
-            ],
-            "id": "gen_npc_elara_chronicler",
-            "data": {
-                "name": "Elara, The Watcher's Chronicler",
-                "description": "A gaunt figure, eyes wide with obsessive knowledge, muttering fragmented histories of the Silent Watcher. She seems more a part of the ancient place than a visitor, her clothes worn and covered in dust that seems as old as time itself."
-            }
-        },
-        {
-            "type": "item",
-            "keywords": [
-                "tablet",
-                "artifact",
-                "ancient",
-                "runes",
-                "secret"
-            ],
-            "id": "gen_item_obsidian_glyph_tablet",
-            "item_name": "Obsidian Glyph-Tablet",
-            "data": {
-                "description": "A heavy, polished obsidian tablet etched with strange, phosphorescent glyphs that seem to shift subtly in the low light. It hums faintly with an ancient, forgotten power.",
-                "effect": "Contains cryptic verses detailing the Watcher's purpose and a partial prophecy, requiring keen observation or magical deciphering to understand."
-            }
-        },
-        {
-            "type": "location",
-            "keywords": [
-                "chamber",
-                "sanctum",
-                "figure",
-                "hidden",
-                "recess"
-            ],
-            "id": "gen_loc_luminal_recess",
-            "data": {
-                "name": "The Luminal Recess",
-                "description": "A small, perfectly circular chamber carved deep within the Figure, its walls glowing with a soft, internal light that seems to emanate from the very stone. At its center, a pedestal holds a depression perfectly sized for an object yet to be found. The air here is still, heavy with unseen presence, and echoes with the faint, almost imperceptible hum of the Watcher itself."
-            }
-        }
-    ],
-    "current_location_id": "generated_loc_the_figure",
+    "current_location_id": "loc_start",
     "world_flags": {
         "game_started": true
     },
     "locations": {
-        "loc_tavern": {
-            "name": "The Rusty Tankard",
-            "description": "A dim, smoky tavern smelling of stale ale and sawdust. Locals whisper in hushed tones.",
+        "loc_start": {
+            "name": "The Void",
+            "description": "Infinite potential.",
             "exits": [
-                "north",
-                "outside",
-                "The Moonlit Square"
+                "forward",
+                "Naval Man-o'-War",
+                "Tortuga's Pride",
+                "The Serpent's Kiss"
             ]
         },
-        "generated_loc_the_outside": {
-            "name": "The Moonlit Square",
-            "description": "Stepping out from the warm, boisterous tavern, you find yourself bathed in the ethereal glow of the twin moons. The square, paved with ancient, uneven cobblestones, stretches before you. Flickering lanterns hang from the eaves of tall, timber-framed buildings, casting dancing shadows. The air is cool and carries the distant sounds of night life \u2013 a bard's lute, a merchant's distant shout, and the rustle of wind through unseen trees.",
+        "scribe_loc_naval_man-o'-war": {
+            "name": "Naval Man-o'-War",
+            "description": "A formidable ship with sails emblazoned with the stern crest of Captain 'Iron Will' Thorne.",
             "exits": [
-                "back to loc_tavern",
-                "The Whispering Corner"
-            ],
-            "suggested_exits": [
-                "The Grand Market",
-                "The Alchemist's Tower",
-                "Whispering Woods"
+                "Back to The Void"
             ]
         },
-        "generated_loc_the_next_person": {
-            "name": "The Whispering Corner",
-            "description": "You step into a shadowed alcove tucked between two ancient, leaning buildings, the stone worn smooth by countless hands. The air here is thick with the scent of old parchment and a faint, sweet smoke, almost like burnt sugar. Huddled on a low, moss-covered stool is a figure draped in layers of dark, patched cloth, their face obscured by a wide-brimmed, tattered hat. A single, flickering lantern casts long, dancing shadows, making their silhouette seem to shift and sway with an unseen breeze. This is the source of the low, murmuring hum that drew you in \u2013 the next person, a purveyor of secrets and whispered truths, seemingly waiting just for you.",
+        "scribe_loc_tortuga's_pride": {
+            "name": "Tortuga's Pride",
+            "description": "The nearest port, a haven for all manner of rogues and revelers.",
             "exits": [
-                "back to generated_loc_the_outside",
-                "The Figure (The Silent Watcher)"
-            ],
-            "suggested_exits": [
-                "The Obsidian Market",
-                "The Silent Library",
-                "The Moonlit Bridge"
+                "Back to The Void"
             ]
         },
-        "generated_loc_the_figure": {
-            "name": "The Veiled Sanctuary",
-            "description": "The air here is thick with an ancient, resonant silence, broken only by the faint hum of unseen energies. Before you stands The Figure, a presence more felt than seen, its form perpetually shrouded in shifting shadows that seem to absorb the very light. The chamber itself is vast, its walls carved with intricate, pulsing glyphs that faintly illuminate the space. A single, obsidian pedestal rests near The Figure, hinting at rituals long forgotten or yet to come. The ground beneath your feet feels strangely warm, as if it breathes with a life of its own.",
+        "scribe_loc_the_serpent's_kiss": {
+            "name": "The Serpent's Kiss",
+            "description": "Captain 'Ironhide' Kael's notorious vessel, a viper in the waves, always on the prowl",
             "exits": [
-                "back to generated_loc_the_figure",
-                "The Veiled Sanctuary"
-            ],
-            "suggested_exits": [
-                "The Whispering Labyrinth",
-                "The Portal Nexus",
-                "The Echoing Chasm"
+                "Back to The Void"
             ]
         }
     },
     "npcs": {
-        "barkeep": {
-            "name": "Grum",
-            "location_id": "loc_tavern",
+        "scribe_npc_captain_'iron_will'_thorne": {
+            "name": "Captain 'Iron Will' Thorne",
+            "location_id": "loc_start",
             "status": "alive",
-            "attitude": "neutral"
+            "attitude": "unknown",
+            "description": "He's notoriously prejudiced, seeing any deviation from his rigid norms as a personal affront. He's here to stamp out what he considers 'immorality.'"
+        },
+        "scribe_npc_jax": {
+            "name": "Jax",
+            "location_id": "loc_start",
+            "status": "alive",
+            "attitude": "unknown",
+            "description": "A lean, tattooed shipmate, whose eyes, the color of a stormy sea, hold a mix of challenge and undeniable admiration."
+        },
+        "scribe_npc_silus": {
+            "name": "Silus",
+            "location_id": "loc_start",
+            "status": "alive",
+            "attitude": "unknown",
+            "description": "The fiery quartermaster, a master of blades and biting wit with a reputation for daring escapades and even more daring affections."
+        },
+        "scribe_npc_captain_'ironhide'_kael": {
+            "name": "Captain 'Ironhide' Kael",
+            "location_id": "loc_start",
+            "status": "alive",
+            "attitude": "unknown",
+            "description": "Notorious captain of 'The Serpent's Kiss'"
         }
     },
     "story_state": {
-        "current_act": 1,
-        "global_tension": 7,
-        "current_objective": "Attempt to establish communication with The Figure.",
-        "narrative_direction": "Anticipatory, enigmatic, focusing on the potential for a direct, albeit mysterious, interaction and the unveiling of its silent presence."
-    }
+        "genre": "Swashbuckling Adventure",
+        "narrative_direction": "The player is excited about sailing to Tortuga's Pride. Lean into the classic pirate voyage tropes: the salt spray, the creaking timbers, the distant horizon. Describe the bustling port as they prepare, or the open sea if they've already cast off. This is a journey with a clear destination driven by player enthusiasm. Focus on the thrill of the open sea and the allure of their chosen destination.",
+        "active_threat": "A notoriously swift and ruthless Pirate Hunter vessel, 'The Serpent's Kiss,' commanded by the relentless Captain 'Ironhide' Kael, has recently been sighted in these waters, known for capturing pirate crews and turning them over to the Crown for hefty bounties. They might appear on the horizon, or their reputation could precede them at Tortuga's Pride."
+    },
+    "shadow_queue": [
+        {
+            "type": "location",
+            "name": "The Weave's Shimmering Threshold",
+            "description": "A pulsating tear in the fabric of the Void, radiating a gentle, inviting warmth and a soft, melodic hum. It seems to beckon, hinting at other realities or hidden truths.",
+            "keywords": [
+                "portal",
+                "gateway",
+                "anomaly",
+                "distortion",
+                "warmth",
+                "hum",
+                "passage",
+                "threshold",
+                "void",
+                "fantasy"
+            ]
+        },
+        {
+            "type": "item",
+            "name": "Heartstone of the Unravelled",
+            "description": "Nestled at the heart of the distortion, a large, multifaceted gem pulses with an inner light, emitting the rhythmic hum and the unusual warmth. It feels like a fragment of creation itself, fallen into the Void.",
+            "keywords": [
+                "artifact",
+                "gem",
+                "crystal",
+                "heartstone",
+                "warmth",
+                "hum",
+                "power",
+                "ancient",
+                "void",
+                "creation",
+                "fantasy"
+            ]
+        },
+        {
+            "type": "npc",
+            "name": "The Dream-Seer's Silhouette",
+            "description": "Within the shimmering distortion, a faint, humanoid silhouette flickers into brief focus. Its form is indistinct, but its presence feels incredibly ancient and perceptive, observing your every move from the veil.",
+            "keywords": [
+                "entity",
+                "spirit",
+                "dreamer",
+                "seer",
+                "watcher",
+                "silhouette",
+                "ethereal",
+                "void",
+                "ancient",
+                "mysterious",
+                "fantasy"
+            ]
+        },
+        {
+            "type": "npcs",
+            "name": "The Dream-Seer's Silhouette",
+            "description": "A colossal figure of shifting shadows and faint starlight materializes before you. Its eyes, burning with an ancient, knowing light, pierce through the void, fixing upon your very soul. It floats in unnerving silence, an enigma of intent, its presence demanding decipherment.",
+            "keywords": [
+                "dream-seer",
+                "silhouette",
+                "figure",
+                "gaze",
+                "mystery",
+                "ancient",
+                "shadow",
+                "starlight",
+                "enigma",
+                "observer",
+                "watcher"
+            ]
+        },
+        {
+            "type": "items",
+            "name": "The Pulsating Heartstone",
+            "description": "Just beyond the Dream-Seer's form, suspended in the void, a gemstone of impossible depths throbs with a soft, crimson light. It hums with a silent song, radiating a strange, almost magnetic warmth that hints at a power beyond comprehension\u2014the very mystery the Dream-Seer's gaze seems to guard or reveal.",
+            "keywords": [
+                "heartstone",
+                "gemstone",
+                "pulsating",
+                "crimson",
+                "light",
+                "power",
+                "mystery",
+                "warmth",
+                "song",
+                "artifact",
+                "relic",
+                "source"
+            ]
+        },
+        {
+            "type": "locations",
+            "name": "Whispers of Fragmented Truths",
+            "description": "Around you, the Void shimmers with ethereal motes of light, coalescing into fleeting images and murmurs. These are the spectral echoes of forgotten truths, fragmented memories of worlds and beings long vanished. They drift tantalizingly close, offering glimpses of context or revelation if one can grasp their ephemeral essence.",
+            "keywords": [
+                "whispers",
+                "fragments",
+                "truths",
+                "memories",
+                "echoes",
+                "void",
+                "past",
+                "revelation",
+                "ethereal",
+                "glimpses",
+                "knowledge"
+            ]
+        }
+    ]
 }

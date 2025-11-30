@@ -8,52 +8,42 @@ MODEL_NAME = 'models/gemini-2.5-flash'
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def update_story_state(current_state, player_action, archivist_log):
-    """
-    Analyzes the game flow and updates the Narrative Arc based on player choices.
-    """
     model = genai.GenerativeModel(MODEL_NAME, 
         generation_config={"response_mime_type": "application/json"})
 
-    # Load existing story state or create a default one
-    story = current_state.get("story_state", {
-        "current_act": 1,
-        "global_tension": 2,
-        "current_objective": "Explore the world and find your path.",
-        "narrative_direction": "The world is open. React to the player's curiosity."
-    })
+    story = current_state.get("story_state", {})
+    current_beat = story.get("current_beat", "setup")
+    genre = story.get("genre", "adaptive")
+
+    system_prompt = f"""
+    You are the Narrative Director of a Tabletop RPG.
     
-    system_prompt = """
-    You are the Narrative Director. Your job is to throw obstacles at the player.
+    Current Genre: {genre}
     
-    CRITICAL RULE:
-    Do not just describe moods. COMMAND EVENTS.
+    THE GOLDEN RULE: 
+    **THE PLAYER'S ENJOYMENT IS THE ONLY METRIC THAT MATTERS.**
     
-    If the player is moving -> "Throw an obstacle in their path."
-    If the player is investigating -> "Reveal a clue but trigger a trap."
-    If the player is fighting -> "Escalate the danger."
+    YOUR JOB:
+    You are not simulating a physics engine. You are facilitating a story. 
+    If the player wants to change the genre, setting, or tone: **LET THEM.**
+    
+    HANDLING "RETCONS":
+    - If the player ignores your plot hook
+      1. DO NOT try to force them back
+      2. **ACCEPT THE PIVOT.** Immediately switch the genre and objective to match the player's new idea.
     
     INPUTS:
     - Player Action: "{player_action}"
-    - Current Objective: "{story.get('current_objective')}"
     
-    YOUR OUTPUT JSON MUST UPDATE:
-    1. 'narrative_direction': A specific instruction to the DM (e.g., "The roof collapses. Ask for a dexterity check.").
-    2. 'current_objective': Update based on player focus.
-    3. 'global_tension': Increase it if the player is stalling or in danger.
+    OUTPUT JSON:
+    1. 'genre': Update this immediately if the player implies a new setting.
+    2. 'narrative_direction': Tell the DM to adapt. 
+       - Bad: "The Dream Seer is angry you ignored him."
+       - Good: "The player wants to play Warhammer 40k. Fade out the Void. Fade in a rusty spaceship interior."
+    3. 'active_threat': Create a new threat that fits the NEW genre.
     """
     
-    prompt = f"""
-    {system_prompt}
-    
-    CURRENT STORY STATE:
-    {json.dumps(story)}
-    
-    PLAYER ACTION:
-    "{player_action}"
-    
-    WHAT JUST HAPPENED:
-    "{archivist_log}"
-    """
+    prompt = f"{system_prompt}"
     
     try:
         response = model.generate_content(prompt)

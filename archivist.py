@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from utils import load_game, save_game
 
 load_dotenv()
-# Make sure you are using a model name that worked for you previously
 model_name = 'models/gemini-2.5-flash' 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
@@ -16,29 +15,24 @@ def get_archivist_response(current_state, user_action):
     system_prompt = """
     You are the Archivist. You manage the Game State.
     
-    INPUTS:
-    1. Current State (JSON)
-    2. Player Action
+    YOUR JOB:
+    1. Analyze the action.
+    2. Check for missing targets (NPCs/Locations/Items).
+    3. If valid, output a JSON object with the changes.
     
-    CRITICAL INSTRUCTION - MOVEMENT:
-    If the user tries to move to a location NOT in the 'locations' keys (e.g., "I go outside", "I leave", "I go to the shop"):
-    1. You MUST return {"error": "target_missing", "target_name": "The Name of the Place"}
-    2. If the user is vague (e.g., "I leave"), infer the target name (e.g., "The Outside").
+    CRITICAL RULE - MISSING TARGETS:
+    If the user mentions a target NOT in the current state:
+    RETURN: {"error": "target_missing", "target_name": "The Name"}
     
-    CRITICAL INSTRUCTION - INTERACTION:
-    If the user interacts with an NPC/Item that is missing -> {"error": "target_missing", "target_name": "..."}
-    
-    Otherwise, return normal JSON updates with a "narrative_cue".
+    CRITICAL RULE - CONVERSATION:
+    If the user talks, you MUST return a "narrative_cue" explaining the result.
+    Do NOT return empty JSON.
     """
 
     prompt = f"""
     {system_prompt}
-    
-    CURRENT STATE:
-    {json.dumps(current_state)}
-    
-    PLAYER ACTION:
-    "{user_action}"
+    CURRENT STATE: {json.dumps(current_state)}
+    PLAYER ACTION: "{user_action}"
     """
 
     response = model.generate_content(prompt)
@@ -49,47 +43,28 @@ def get_archivist_response(current_state, user_action):
         return {"narrative_cue": "The world reacts silently."}
 
 def update_world_state(updates):
-    """
-    Merges the AI's proposed updates into the actual world_state.json
-    Now supports both direct structure matching (AI preference) and custom keys.
-    """
     state = load_game()
     
-    # 1. Handle Narrative Cue
+    if "player_update" in updates:
+        pass
     if "narrative_cue" in updates:
-        print(f"\n[ARCHIVIST LOG]: {updates['narrative_cue']}")
-
-    # 2. Update Player (Handles both specific deltas and direct overwrites)
-    if "player" in updates:
-        # The AI sent a direct update like {'player': {'hp': 20}}
-        for key, val in updates['player'].items():
-            state['player'][key] = val
-            
-    elif "player_update" in updates:
-        # The AI followed the strict custom instructions
-        p_up = updates['player_update']
-        if "hp" in p_up: state['player']['hp'] = p_up['hp']
-        if "inventory_add" in p_up:
-            for item in p_up['inventory_add']: state['player']['inventory'].append(item)
-        if "inventory_remove" in p_up:
-            for item in p_up['inventory_remove']:
-                if item in state['player']['inventory']: state['player']['inventory'].remove(item)
-
-    # 3. Update NPCs (Handles both direct 'npcs' key and 'npc_updates')
-    # We check for 'npcs' first because that's what your AI just generated.
-    npc_source = updates.get("npcs") or updates.get("npc_updates")
+        pass 
+    if "narrative_cue" in updates: print(f"Log: {updates['narrative_cue']}")
     
+    if "player" in updates:
+        for k, v in updates['player'].items(): state['player'][k] = v
+    if "player_update" in updates:
+        p = updates['player_update']
+        if "hp" in p: state['player']['hp'] = p['hp']
+        if "inventory_add" in p: 
+            for i in p['inventory_add']: state['player']['inventory'].append(i)
+            
+    # Handle NPCs
+    npc_source = updates.get("npcs") or updates.get("npc_updates")
     if npc_source:
-        for npc_id, npc_data in npc_source.items():
-            if npc_id in state['npcs']:
-                for key, val in npc_data.items():
-                    state['npcs'][npc_id][key] = val
+        for nid, ndata in npc_source.items():
+            if nid in state['npcs']:
+                for k, v in ndata.items(): state['npcs'][nid][k] = v
 
-    # 4. Update World Flags (New!)
-    if "world_flags" in updates:
-        for flag, val in updates['world_flags'].items():
-            state['world_flags'][flag] = val
-
-    # 5. Save
     save_game(state)
     return state

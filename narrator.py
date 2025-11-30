@@ -1,60 +1,54 @@
 import os
+import json
 import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
-
 MODEL_NAME = 'models/gemini-2.5-flash' 
-
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def narrate_scene(current_state, recent_action, archivist_log):
-    """
-    Generates a story segment based on the current state and what just happened.
-    """
     model = genai.GenerativeModel(MODEL_NAME)
 
+    # Filter State (Fog of War)
+    visible_location = current_state.get("locations", {}).get(current_state.get("current_location_id"), {})
+    
     story_state = current_state.get("story_state", {})
     direction = story_state.get("narrative_direction", "Describe the scene.")
+    threat = story_state.get("active_threat", "None")
+    beat = story_state.get("current_beat", "setup")
     tension = story_state.get("global_tension", 1)
 
     system_prompt = f"""
-    You are the Dungeon Master (DM). You are running a tabletop RPG.
+    You are a Dungeon Master (DM) playing a game with a friend.
     
-    Current Tension: {tension}/10.
-    Director's Instruction: "{direction}"
+    CONTEXT:
+    - Director's Orders: "{direction}"
+    - Current Threat: {threat}
     
-    YOUR RULES:
-    1. BE CONCISE. Do not write paragraphs of fluff. Get to the point.
-    2. PRESENT A PROBLEM. If tension is high (>5), something should be hunting, blocking, or attacking the player RIGHT NOW.
-    3. CALL TO ACTION. You MUST end your response by asking the player what they want to do.
+    YOUR ATTITUDE:
+    1. **YOU ARE NOT THE WORLD.** You are the storyteller. Do not get attached to your NPCs.
+    2. **"YES, AND..."** : If the player says "I am a Space Ork," do not say "No you aren't, you are in a void." 
+       - Say: "The void shatters around you! The illusion falls away. You stand in your heavy armor, holding a Choppa."
+    3. **ADAPTABILITY:** If the player ignores a detail, drop it. If they focus on a detail, expand it.
     
-    BAD RESPONSE:
-    "The shadows swirl around you, whispering ancient secrets of a forgotten time, beautiful and haunting..." (Too passive).
-    
-    GOOD RESPONSE:
-    "The shadows solidify into a clawed hand grabbing at your leg! The door is locked. Do you fight or try to pick the lock?"
+    STRICT RULES:
+    - Never block the player's creativity.
+    - If the player contradicts the current scene, assume the scene was an illusion or a dream and move to the new reality.
+    - Keep descriptions punchy and exciting.
     
     INPUTS:
-    - Action: {recent_action}
-    - Outcome: {archivist_log}
+    - Player Action: "{recent_action}"
+    - Physical Result: "{archivist_log}"
     
     OUTPUT:
-    Write the DM's response. Be direct. Demand input.
+    A responsive, improvisational narrative response.
     """
+    
+    prompt = f"{system_prompt}"
 
-    prompt = f"""
-    {system_prompt}
-    
-    CURRENT WORLD STATE:
-    {current_state}
-    
-    PLAYER ACTION:
-    "{recent_action}"
-    
-    RESULT OF ACTION (ARCHIVIST LOG):
-    "{archivist_log}"
-    """
-
-    response = model.generate_content(prompt)
-    return response.text
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return "The world shifts..."

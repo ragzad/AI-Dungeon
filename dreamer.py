@@ -8,10 +8,6 @@ MODEL_NAME = 'models/gemini-2.5-flash'
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def dream_up_content(current_state):
-    """
-    Looks at the current story direction and pre-generates 
-    entities that might be needed soon.
-    """
     model = genai.GenerativeModel(MODEL_NAME, 
         generation_config={"response_mime_type": "application/json"})
 
@@ -21,42 +17,28 @@ def dream_up_content(current_state):
     story = current_state.get("story_state", {})
     current_queue = current_state.get("shadow_queue", [])
 
-    # Optimization: Don't dream if we already have plenty of ideas (Limit 5)
-    if len(current_queue) >= 5:
-        return []
+    if len(current_queue) >= 5: return []
 
     system_prompt = """
-    You are The Dreamer. You operate in the background of a roleplaying game.
+    You are The Dreamer.
     
     YOUR JOB:
-    Predict what the player might encounter next based on the current location and story mood.
-    Generate 2-3 "Potential Entities" (NPCs, Items, or Locations).
-    
-    INPUTS:
-    - Location: {location.get('name')} ({location.get('description')})
-    - Narrative Mood: {story.get('narrative_direction')}
+    Predict what the player might encounter next based on the location and genre.
     
     OUTPUT SCHEMA:
-    Return a LIST of JSON objects. Each object must look like a standard Entity (type, id, data).
-    
-    EXAMPLE:
-    [
-      { "type": "npc", "keywords": ["guard", "soldier"], "id": "gen_guard_01", "data": { "name": "Nervous Guard", ... } },
-      { "type": "item", "keywords": ["sword", "weapon"], "item_name": "Rusty Blade", ... }
-    ]
+    Return a LIST of JSON objects (npcs, items, or locations).
+    Add "keywords" list to each for matching.
     """
 
     prompt = f"""
     {system_prompt}
-    
-    CONTEXT:
-    Location: {location.get('name')}
-    Mood: {story.get('narrative_direction')}
+    LOCATION: {location.get('name')}
+    GENRE: {story.get('genre')}
+    MOOD: {story.get('narrative_direction')}
     """
     
     try:
         response = model.generate_content(prompt)
         return json.loads(response.text)
     except Exception as e:
-        print(f"Dreamer Error: {e}")
         return []
