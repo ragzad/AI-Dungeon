@@ -2,106 +2,92 @@ import os
 import json
 import google.generativeai as genai
 from dotenv import load_dotenv
-from utils import load_game, save_game
 
 load_dotenv()
-model_name = 'models/gemini-2.5-flash' 
+MODEL_NAME = 'models/gemini-2.5-flash' 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-def get_archivist_response(current_state, user_action):
-    model = genai.GenerativeModel(model_name,
-        generation_config={"response_mime_type": "application/json"})
+def calculate_world_delta(current_state, player_action):
+    """
+    Calculates purely LOGICAL changes (Physics, Inventory, Quests).
+    tuned to be "Generous" and "Fail Forward".
+    """
+    model = genai.GenerativeModel(MODEL_NAME, generation_config={"response_mime_type": "application/json"})
 
-    # Extract relevant NPC data for context
     loc_id = current_state.get("current_location_id")
-    local_npcs = {k:v for k,v in current_state.get("npcs", {}).items() if v.get("location_id") == loc_id}
-
-    system_prompt = """
-    You are the Archivist. You manage the Game Logic and Physics.
+    location = current_state["locations"].get(loc_id, {})
+    ground_items_raw = location.get("items", [])
+    inventory_raw = current_state['player']['inventory']
+    journal_raw = current_state['player'].get('journal', [])
+    
+    # --- SAFETY PATCH: Handle legacy string items in save file ---
+    ground_names = []
+    for i in ground_items_raw:
+        if isinstance(i, dict): ground_names.append(i.get('name'))
+        else: ground_names.append(str(i))
+        
+    inv_names = []
+    for i in inventory_raw:
+        if isinstance(i, dict): inv_names.append(i.get('name'))
+        else: inv_names.append(str(i))
+        
+    # Format Journal for Context
+    journal_context = [f"{entry.get('topic')}: {entry.get('entry')}" for entry in journal_raw[-5:]] # Last 5 entries to keep context fresh but concise
+    # -------------------------------------------------------------
+    
+    system_prompt = f"""
+    You are the World Engine (Archivist). Calculate the mathematical/logical changes to the game state.
+    
+    INPUT CONTEXT:
+    - Location: {location.get('name')}
+    - Items on Ground: {ground_names}
+    - Player Inventory: {inv_names}
+    - Player Knowledge (Journal): {journal_context}
+    - Current Objective: {current_state['story_state'].get('current_objective')}
     
     YOUR JOB:
-    1. Analyze the 'Player Action' for Feasibility.
-       - "I throw my ship" -> IMPOSSIBLE. Result: Failure.
-       - "I rob him" -> POSSIBLE. Result: Combat/Hostility.
-    2. Update NPC Attitudes.
-       - If player attacks/robs -> Set NPC attitude to 'hostile'.
-       - If player helps -> Set NPC attitude to 'friendly'.
+    1. Determine the outcome of the PLAYER ACTION.
+    2. Maintain CONTINUITY. If the player asks about a topic in their Journal, ensure the result aligns with that known fact.
     
-    CRITICAL RULE - LOGIC CHECK:
-    If the action is physically impossible, return a result indicating failure and mockery. Do NOT allow the action to succeed.
-    
-    CRITICAL RULE - EMOTIONAL PERMANENCE:
-    If an NPC becomes 'hostile', they DO NOT help the player in the same turn.
+    CRITICAL RULE - BIAS TOWARDS COMPETENCE:
+    - The player is a HERO/PROTAGONIST. They are competent.
+    - **Simple Actions (Looking, Walking, Talking, Taking):** AUTOMATIC SUCCESS. Do not roll for failure.
+    - **Complex Actions (Fighting, Hacking, Persuading):** Use "Fail Forward". If they fail, they should still make progress but at a cost (e.g., they open the door but alert the guards).
+    - **NEVER** return a "Dead End" (e.g., "You find nothing", "He ignores you") unless it is physically impossible.
+    - If the player looks for something reasonable (e.g. "Contacts in a bar"), **assume it exists** and succeed.
     
     OUTPUT SCHEMA:
-    {
-  "narrative_cue": "Description of outcome",
-  "npc_updates": { "npc_id": { "status": "dead", "attitude": "fearful" } },
-  "location_updates": {
-       "loc_id": { 
-           "description": "The tavern is now a smoldering ruin.",
-           "remove_exits": ["upstairs"] 
-       }
-   },
-  "item_updates": {
-       "old_map": { "state": "torn", "description": "A map torn in half." }
-   }
-    }
+    {{
+      "action_result": "Success" | "Failure" | "Mixed Success",
+      "player_delta": {{
+         "hp_change": 0,
+         "inventory_add": [], 
+         "inventory_remove": ["Item Name"]
+      }},
+      "location_delta": {{
+         "ground_items_add": [], 
+         "ground_items_remove": ["Item Name"] 
+      }},
+      "quest_update": {{
+         "new_objective": "String or null",
+         "tension_change": 0
+      }}
+    }}
     """
-
+    
     prompt = f"""
     {system_prompt}
-    CURRENT STATE: {json.dumps(current_state)}
-    LOCAL NPCS: {json.dumps(local_npcs)}
-    PLAYER ACTION: "{user_action}"
+    PLAYER ACTION: "{player_action}"
     """
-
-    response = model.generate_content(prompt)
     
     try:
+        response = model.generate_content(prompt)
         return json.loads(response.text)
-    except json.JSONDecodeError:
-        return {"narrative_cue": "The action fails to take hold on reality."}
-
-def update_world_state(updates):
-    state = load_game()
-    
-    if "player_update" in updates:
-        pass
-    if "narrative_cue" in updates:
-        pass 
-    if "narrative_cue" in updates: print(f"Log: {updates['narrative_cue']}")
-    
-    if "player" in updates:
-        for k, v in updates['player'].items(): state['player'][k] = v
-    if "player_update" in updates:
-        p = updates['player_update']
-        if "hp" in p: state['player']['hp'] = p['hp']
-        if "inventory_add" in p: 
-            for i in p['inventory_add']: state['player']['inventory'].append(i)
-    if "location_updates" in updates:
-        for loc_id, mutations in updates["location_updates"].items():
-            # Handle "Current Location" alias
-            if loc_id == "current": 
-                loc_id = state["current_location_id"]
-                
-            if loc_id in state["locations"]:
-                # Update description if provided
-                if "description" in mutations:
-                    state["locations"][loc_id]["description"] = mutations["description"]
-                # Handle exits changes
-                if "remove_exits" in mutations:
-                    state["locations"][loc_id]["exits"] = [
-                        e for e in state["locations"][loc_id]["exits"] 
-                        if e not in mutations["remove_exits"]
-                    ]        
-                                
-    # Handle NPCs
-    npc_source = updates.get("npcs") or updates.get("npc_updates")
-    if npc_source:
-        for nid, ndata in npc_source.items():
-            if nid in state['npcs']:
-                for k, v in ndata.items(): state['npcs'][nid][k] = v
-
-    save_game(state)
-    return state
+    except Exception:
+        # Fallback for errors: Default to success logic to keep flow moving
+        return { 
+            "action_result": "Success", 
+            "player_delta": {}, 
+            "location_delta": {}, 
+            "quest_update": {} 
+        }

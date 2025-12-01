@@ -7,42 +7,64 @@ load_dotenv()
 MODEL_NAME = 'models/gemini-2.5-flash' 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-def narrate_scene(current_state, recent_action, archivist_log):
+def narrate_scene(current_state, recent_action, world_delta):
+    """
+    Renders the scene by interpreting the State Delta directly.
+    """
     model = genai.GenerativeModel(MODEL_NAME)
 
-    visible_location = current_state.get("locations", {}).get(current_state.get("current_location_id"), {})
-    story_state = current_state.get("story_state", {})
-    direction = story_state.get("narrative_direction", "Describe the surroundings.")
-    active_events = [e for e in current_state.get("world_events", []) if e.get("status") == "active"]
+    loc_id = current_state.get("current_location_id")
+    location = current_state["locations"].get(loc_id, {})
     
-    visible_npcs = []
-    for n in current_state.get("npcs", {}).values():
-        if n["location_id"] == current_state.get("current_location_id"):
-            visible_npcs.append(f"- {n['name']} ({n.get('attitude', 'neutral')})")
-            
+    # Items are now guaranteed to be objects by Game Master
+    ground_items = [i.get('name', 'Unknown') for i in location.get("items", [])]
+    
+    # Extract Journal for Context (Memory)
+    journal_raw = current_state['player'].get('journal', [])
+    # We take the most recent 3 entries to keep the story focused on active threads
+    relevant_lore = [f"{e.get('topic')}: {e.get('entry')}" for e in journal_raw[-3:]]
+
+    # Convert Delta to Context strings
+    changes_context = []
+    p_delta = world_delta.get("player_delta", {})
+    q_delta = world_delta.get("quest_update", {})
+    l_delta = world_delta.get("location_delta", {})
+    
+    if p_delta.get("inventory_remove"):
+        changes_context.append(f"Player lost/used: {p_delta['inventory_remove']}")
+    if p_delta.get("inventory_add"):
+        # Handle dicts or strings in delta (Game Master handles the state save, but delta might be raw)
+        added = [x['name'] if isinstance(x, dict) else str(x) for x in p_delta['inventory_add']]
+        changes_context.append(f"Player gained: {added}")
+        
+    if l_delta.get("ground_items_add"):
+        changes_context.append(f"Appeared on ground: {l_delta['ground_items_add']}")
+    if q_delta.get("new_objective"):
+        changes_context.append(f"Quest Updated to: {q_delta['new_objective']}")
+    
     system_prompt = f"""
     You are the Dungeon Master.
     
     PLAYER ACTION: "{recent_action}"
     
-    *** CRITICAL OUTCOME (MUST INCLUDE THIS): ***
-    "{archivist_log}"
-    *********************************************
+    WHAT ACTUALLY HAPPENED (The Logic Engine):
+    - Result: {world_delta.get('action_result')}
+    - Changes: {changes_context}
     
-    CONTEXT:
-    - Location: {visible_location.get("name", "Unknown")} ({visible_location.get("description", "")})
-    - DM Instruction: "{direction}"
-    - Visible NPCs: {visible_npcs}
+    CURRENT CONTEXT:
+    - Location: {location.get('name')}
+    - Items Nearby: {ground_items}
+    - RELEVANT LORE/MEMORY: {relevant_lore}
     
     GUIDELINES:
-    1. **PRIORITIZE THE OUTCOME:** The 'Critical Outcome' above comes from the game physics engine. If it says the player found 'Void Kin' lore, you MUST describe that discovery in detail. Do not summarize it away.
-    2. **ATMOSPHERE:** Be concrete. Describe sights, sounds, and smells.
-    3. **INTERACTIVITY:** End by hinting at what else the player can do.
-    4. **BREVITY:** Keep it punchy (3-4 sentences max), but do not cut out the Critical Outcome details.
+    1. **Show, Don't Tell:** Use the 'Changes' list to describe the action.
+    2. **Immersive:** Keep it punchy and atmospheric.
+    3. **CONSISTENCY:** Refer to the 'RELEVANT LORE' if the player mentions specific topics. Do not invent new plots if an existing one explains the situation.
+    4. **READING DOCUMENTS:** If the player reads a document, quote it directly in the text.
     """
     
     try:
         response = model.generate_content(system_prompt)
         return response.text
     except Exception:
-        return "The world is silent."
+        return "The world shifts quietly."

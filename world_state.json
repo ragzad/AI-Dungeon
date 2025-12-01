@@ -1,41 +1,68 @@
 {
     "session_id": "new_game",
     "player": {
-        "name": "Traveler",
+        "name": "Elara Vance",
         "hp": 20,
         "max_hp": 20,
         "inventory": [
             {
-                "name": "Old Map",
-                "description": "A faded, brittle map fragment.",
-                "state": "default"
+                "name": "Smartphone",
+                "description": "A standard-issue smartphone, currently displaying a low battery warning.",
+                "state": "low battery"
             },
             {
-                "name": "Dagger",
-                "description": "A simple iron blade.",
-                "state": "dull"
+                "name": "Student ID",
+                "description": "Elara's student ID for the Northport University, featuring a rather unflattering photo.",
+                "state": "scuffed"
+            },
+            {
+                "name": "Small Silver Charm",
+                "description": "A small, unassuming silver charm shaped like a crescent moon, inherited from your grandmother. It feels warm to the touch.",
+                "state": "warm"
             }
         ],
         "journal": []
     },
-    "current_location_id": "loc_start",
+    "current_location_id": "loc_genesis_start",
     "world_flags": {
-        "game_started": false
+        "game_started": true
     },
     "locations": {
-        "loc_start": {
-            "name": "The Void",
-            "description": "The unformed nothingness before creation.",
-            "exits": []
+        "loc_genesis_start": {
+            "name": "The Alchemist's Brew Coffee Shop",
+            "description": "The Alchemist's Brew isn't just any coffee shop. Nestled between a dusty antique bookshop and a perpetually closed tailor, its heavy oak door is always ajar, inviting patrons with the scent of roasted beans, caramelized sugar, and a faint, inexplicable whiff of ozone. Inside, the space is a riot of mismatched velvet armchairs, dark wooden tables etched with forgotten symbols, and shelves overflowing with arcane-looking jars, peculiar botanical specimens, and flickering candles whose flames seem to dance to an unheard rhythm. A low murmur of conversation, punctuated by the gentle hiss of an espresso machine, creates a comforting, yet subtly magical, ambiance. Sunlight struggles to penetrate the stained-glass windows depicting celestial maps, casting an ethereal glow on the patrons, some of whom look suspiciously like they've stepped out of another era, or perhaps, another realm.",
+            "exits": [
+                "Main Street (Northport)",
+                "Back Alley",
+                "Restrooms",
+                "Stairs to Basement (Staff Only)"
+            ],
+            "items": [
+                {
+                    "name": "The Daily Scroll",
+                    "description": "A local newspaper, usually full of mundane news, but today's headline is strangely cryptic: 'Whispers of the Veil: Missing Artifacts Reported Across Northport.'",
+                    "state": "folded"
+                },
+                {
+                    "name": "Forgotten Notebook",
+                    "description": "A leather-bound notebook left on a nearby table. Its pages are filled with sketches of impossible creatures and complex diagrams that glow faintly.",
+                    "state": "open to a glowing page"
+                },
+                {
+                    "name": "Ornate Sugar Pot",
+                    "description": "A heavy, silver sugar pot with intricate carvings of vines and tiny, winged creatures. The sugar inside shimmers with an unusual light.",
+                    "state": "full"
+                }
+            ]
         }
     },
     "npcs": {},
     "story_state": {
         "current_act": 1,
         "global_tension": 1,
-        "genre": "adaptive",
-        "current_objective": "Establish the setting.",
-        "narrative_direction": "Observe the player's tone to determine the genre."
+        "genre": "Urban Fantasy",
+        "current_objective": "Begin.",
+        "narrative_direction": "Start."
     },
     "world_events": []
 }
