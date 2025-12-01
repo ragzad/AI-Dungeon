@@ -4,9 +4,19 @@
         "name": "Traveler",
         "hp": 20,
         "max_hp": 20,
-        "inventory": []
+        "inventory": [
+            "Old Map",
+            "Dagger",
+            "heavy, canvas pack",
+            "thick, blunted hunting knife",
+            "waterskin",
+            "iron rations",
+            "copper coins",
+            "faded, brittle map fragment",
+            "ornate silver locket"
+        ]
     },
-    "current_location_id": "loc_start",
+    "current_location_id": "scribe_loc_deck_of_a_brigantine",
     "world_flags": {
         "game_started": true
     },
@@ -15,32 +25,20 @@
             "name": "The Beginning",
             "description": "You stand in a gray void. To form the world, you must take an action. Will you draw a sword? Check your revolver? Or look at the stars?",
             "exits": [
-                "forward",
-                "The Gray Void",
-                "The Unknown",
-                "the path 'forward'"
+                "forward"
             ]
         },
-        "scribe_loc_the_gray_void": {
-            "name": "The Gray Void",
-            "description": "a vast, featureless gray void, an endless, uniform expanse of soft, muted gray stretching into infinity",
+        "scribe_loc_deck_of_a_brigantine": {
+            "name": "deck of a brigantine",
+            "description": "The weathered, rocking deck of a brigantine, where the player stands.",
             "exits": [
-                "Back to The Beginning"
+                "rocky island"
             ]
         },
-        "scribe_loc_the_unknown": {
-            "name": "The Unknown",
-            "description": "A shimmering, indeterminate expanse, a path pregnant with infinite possibilities.",
-            "exits": [
-                "Back to The Beginning"
-            ]
-        },
-        "scribe_loc_the_path_'forward'": {
-            "name": "the path 'forward'",
-            "description": "A tendril of distinction, a whisper of a path in the endless sameness, solidifying to guide you.",
-            "exits": [
-                "Back to The Beginning"
-            ]
+        "scribe_loc_rocky_island": {
+            "name": "rocky island",
+            "description": "A distant, jagged silhouette of a rocky island claws its way from the morning mist.",
+            "exits": []
         }
     },
     "npcs": {},
@@ -49,130 +47,7 @@
         "global_tension": 1,
         "genre": "adaptive",
         "current_objective": "Establish the setting.",
-        "narrative_direction": "The suffocating silence presses in further, intensifying the player's crushing despair."
+        "narrative_direction": "Describe the player's available items."
     },
-    "shadow_queue": [
-        {
-            "type": "location",
-            "name": "The Unending Void",
-            "description": "An infinite expanse of absolute nothingness, devoid of light, sound, or sensation. There are no up or down, no forwards or back\u2014only a profound, disorienting emptiness that stretches beyond all comprehension. It feels both vast and claustrophobic at once, shattering any semblance of prior comfort.",
-            "keywords": [
-                "void",
-                "nothingness",
-                "beginning",
-                "emptiness",
-                "disorientation",
-                "darkness",
-                "abyss",
-                "non-existence",
-                "zero"
-            ]
-        },
-        {
-            "type": "item",
-            "name": "Echo of Self",
-            "description": "Not an object, but a persistent internal resonance. A faint, nagging sensation that 'you' exist, despite the complete lack of physical form or sensory input. It's the barest flicker of consciousness, a desperate anchor in the boundless non-existence, highlighting the immediate mystery of your own being.",
-            "keywords": [
-                "self",
-                "identity",
-                "existence",
-                "consciousness",
-                "echo",
-                "internal",
-                "perception",
-                "anchor",
-                "being",
-                "awareness"
-            ]
-        },
-        {
-            "type": "npc",
-            "name": "The Primordial Query",
-            "description": "A pervasive, voiceless thought that isn't your own, yet resonates deeply within your nascent consciousness. It isn't spoken, but felt: 'Why? What are you? Where is here?' It's the first ripple in the stillness of absolute non-existence, a fundamental question demanding an answer that simply does not exist within the void.",
-            "keywords": [
-                "question",
-                "mystery",
-                "existence",
-                "origin",
-                "whisper",
-                "thought",
-                "entity",
-                "primordial",
-                "query",
-                "unknown"
-            ]
-        },
-        {
-            "type": "location",
-            "name": "The Winding Path",
-            "description": "A narrow, overgrown trail disappears into a mist-shrouded distance. The air here hums with the promise of journey.",
-            "keywords": [
-                "location",
-                "path",
-                "forward",
-                "journey",
-                "unknown",
-                "mist",
-                "adventure",
-                "beginning",
-                "exploration"
-            ]
-        },
-        {
-            "type": "location",
-            "name": "The Gray Abyss",
-            "description": "An impossibly deep chasm, its depths obscured by a shifting, light-absorbing gray mist. A profound silence emanates from it.",
-            "keywords": [
-                "location",
-                "void",
-                "gray",
-                "abyss",
-                "nothingness",
-                "silence",
-                "chasm",
-                "mystery",
-                "choice",
-                "depth",
-                "unknown"
-            ]
-        },
-        {
-            "type": "npc",
-            "name": "The Harbinger of Choices",
-            "description": "A spectral figure, neither male nor female, translucent and shimmering with the light of countless branching futures. It gestures towards two unseen paths.",
-            "keywords": [
-                "npc",
-                "harbinger",
-                "spectral",
-                "choices",
-                "decision",
-                "guide",
-                "future",
-                "beginning",
-                "void",
-                "forward",
-                "entity",
-                "mystery"
-            ]
-        },
-        {
-            "type": "item",
-            "name": "A Simple Satchel",
-            "description": "A sturdy, if plain, leather satchel. It feels light, yet surprisingly resilient, ready to carry whatever tools a new journey might demand.",
-            "keywords": [
-                "item",
-                "satchel",
-                "bag",
-                "container",
-                "journey",
-                "adventure",
-                "tool",
-                "beginning",
-                "storage",
-                "forward",
-                "preparation"
-            ]
-        }
-    ],
     "world_events": []
 }

@@ -23,12 +23,12 @@ def scan_story_for_entities(story_text, current_state):
     You are The Scribe. You synchronize the Story with the Database.
     
     YOUR JOB:
-    Read the provided STORY TEXT. Identify any NEW Items, NPCs, or Locations that were mentioned as being PRESENT.
+    Read the provided STORY TEXT. Identify any NEW Items, NPCs, or Locations.
     
     RULES:
-    1. **Items:** If the text implies the player HAS an item (e.g. "your cutlass"), add it.
-    2. **NPCs:** If a specific character is named (e.g. "Bess"), add them.
-    3. **Locations:** If a specific landmark/ship is named (e.g. "The Gallows Gambit"), add it.
+    1. **Items:** If the text implies the player HAS an item add it.
+    2. **NPCs:** If a specific character is named add them.
+    3. **Locations:** If a specific landmark is named (e.g. "The Gallows Gambit"), add it.
     4. **NO DUPLICATES:** Do not output entities that already exist in the lists provided.
     5. **NO FLAVOR TEXT:** Do not add "The Sky" or "The Wind". Only tangible, interactive elements.
     

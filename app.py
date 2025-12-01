@@ -18,7 +18,7 @@ DEFAULT_STATE = {
     "name": "Traveler",
     "hp": 20,
     "max_hp": 20,
-    "inventory": []
+    "inventory": ["Old Map", "Dagger"]
   },
   "current_location_id": "loc_start",
   "world_flags": {
@@ -106,7 +106,7 @@ if current_state:
         except ImportError:
             st.sidebar.warning("Install 'graphviz' to see the map.")
 
-    # Debug Flags
+    # --- DEBUG FLAGS (Inside Sidebar) ---
     with st.sidebar.expander("🌍 World Flags"):
         st.json(current_state.get('world_flags', {}))
     with st.sidebar.expander("👥 NPC Status"):
@@ -149,6 +149,7 @@ if prompt := st.chat_input("What is your command?"):
     with st.spinner("The Archivist is thinking..."):
         updates = get_archivist_response(current_state, prompt)
         
+        # PROACTIVE LOGIC
         if "error" in updates and updates["error"] == "target_missing":
             missing_name = updates.get("target_name", "Unknown Area")
             
@@ -236,8 +237,9 @@ if prompt := st.chat_input("What is your command?"):
         
         if "new_items" in new_entities and new_entities["new_items"]:
             for item in new_entities["new_items"]:
-                new_state["player"]["inventory"].append(item)
-                st.toast(f"📝 Scribe added item: {item}")
+                if item not in new_state["player"]["inventory"]:
+                    new_state["player"]["inventory"].append(item)
+                    st.toast(f"📝 Scribe added item: {item}")
         
         if "new_npcs" in new_entities and new_entities["new_npcs"]:
             for npc in new_entities["new_npcs"]:
@@ -252,20 +254,39 @@ if prompt := st.chat_input("What is your command?"):
                     }
                     st.toast(f"📝 Scribe recorded NPC: {npc['name']}")
 
+        # --- LOCATION SYNC & GENESIS TELEPORT FIX ---
         if "new_locations" in new_entities and new_entities["new_locations"]:
-            current_loc = new_state["locations"].get(new_state["current_location_id"])
-            if current_loc:
-                for loc in new_entities["new_locations"]:
-                    lid = f"scribe_loc_{loc['name'].lower().replace(' ', '_')}"
-                    if lid not in new_state["locations"]:
-                        new_state["locations"][lid] = {
-                            "name": loc['name'],
-                            "description": loc.get("description", "Spotted in the distance."),
-                            "exits": [f"Back to {current_loc['name']}"]
-                        }
-                        if "exits" not in current_loc: current_loc["exits"] = []
-                        current_loc["exits"].append(loc['name'])
-                        st.toast(f"📝 Scribe mapped: {loc['name']}")
+            current_loc_id = new_state.get("current_location_id")
+            
+            for loc in new_entities["new_locations"]:
+                lid = f"scribe_loc_{loc['name'].lower().replace(' ', '_')}"
+                
+                if lid not in new_state["locations"]:
+                    new_state["locations"][lid] = {
+                        "name": loc['name'],
+                        "description": loc.get("description", "A location found in the story."),
+                        "exits": []
+                    }
+                    st.toast(f"📝 Scribe mapped: {loc['name']}")
+
+                # TELEPORT FIX: If we are in the Void, move us to the new place
+                if current_loc_id == "loc_start":
+                    new_state["current_location_id"] = lid
+                    # Move NPCs too
+                    for nid, npc_data in new_state["npcs"].items():
+                        if npc_data["location_id"] == "loc_start":
+                            npc_data["location_id"] = lid
+                    
+                    st.toast(f"🌀 Reality Shifted to: {loc['name']}")
+                    current_loc_id = lid 
+                
+                # Otherwise, just link it
+                elif current_loc_id != lid:
+                    current_loc_data = new_state["locations"].get(current_loc_id)
+                    if current_loc_data:
+                        if "exits" not in current_loc_data: current_loc_data["exits"] = []
+                        if loc['name'] not in current_loc_data["exits"]:
+                            current_loc_data["exits"].append(loc['name'])
 
         save_game(new_state)
 
