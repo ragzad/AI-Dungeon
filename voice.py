@@ -1,46 +1,51 @@
-import os
+import asyncio
 import base64
-import requests
-from dotenv import load_dotenv
+import edge_tts
+import tempfile
+import os
 
-load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY")
+# Voice Options mapped to Edge-TTS voices
+# You can find more by running `edge-tts --list-voices` in terminal
+VOICE_MAP = {
+    'Puck': 'en-US-ChristopherNeural',  # Deep, warm
+    'Fenrir': 'en-US-EricNeural',       # Deep, intense
+    'Kore': 'en-US-AnaNeural',          # Soft, mysterious
+    'Zephyr': 'en-US-GuyNeural'         # Balanced
+}
 
-# Voice Options:
-# 'Puck' - Deep, warm, slightly gruff (Best for Narrator)
-# 'Fenrir' - Deep, intense (Good for Horror)
-# 'Kore' - Softer, mysterious
-# 'Zephyr' - Balanced, standard
+async def _generate_audio_async(text, voice_name):
+    """
+    Internal async function to generate audio using Edge TTS.
+    """
+    voice = VOICE_MAP.get(voice_name, 'en-US-ChristopherNeural')
+    communicate = edge_tts.Communicate(text, voice)
+    
+    # Save to a temporary file first
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
+        temp_filename = temp_file.name
+    
+    await communicate.save(temp_filename)
+    
+    # Read back as bytes
+    with open(temp_filename, "rb") as f:
+        audio_data = f.read()
+        
+    # Cleanup
+    os.remove(temp_filename)
+    
+    return audio_data
 
 def generate_voice_audio(text, voice_name="Puck"):
     """
-    Generates audio using Gemini's Speech API (REST method for stability).
+    Generates audio using Edge TTS (wrapped synchronously for Streamlit).
+    Returns: Base64 string of the audio.
     """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={API_KEY}"
-    
-    payload = {
-        "contents": [{
-            "parts": [{"text": text}]
-        }],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {
-                "voiceConfig": {
-                    "prebuiltVoiceConfig": {
-                        "voiceName": voice_name
-                    }
-                }
-            }
-        }
-    }
-    
     try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
+        # Run the async function synchronously
+        audio_bytes = asyncio.run(_generate_audio_async(text, voice_name))
         
-        # Extract Audio Data
-        data = response.json()
-        audio_b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+        # Convert to Base64 for the frontend
+        audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
         return audio_b64
         
     except Exception as e:
