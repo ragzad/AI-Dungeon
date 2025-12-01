@@ -2,6 +2,4 @@ streamlit
 google-generativeai
 python-dotenv
 graphviz
-edge-tts
-gTTS
 requests

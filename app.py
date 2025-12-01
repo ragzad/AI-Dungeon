@@ -6,9 +6,6 @@ from creator import generate_full_scenario, generate_random_scenario_idea
 from gamemaster import run_game_turn
 from cartographer import render_map 
 
-# NEW VOICE ENGINE
-from voice import generate_voice_audio
-
 # --- CONSTANTS: DEFAULT STATE ---
 DEFAULT_STATE = {
   "session_id": "new_game",
@@ -98,14 +95,12 @@ if not current_state.get("world_flags", {}).get("game_started", False):
                     
                     save_game(new_state)
                     
-                    # Generate Intro Audio
+                    # Generate Intro Text
                     intro_text = scenario_data["intro_text"]
-                    audio_b64 = generate_voice_audio(intro_text)
                     
                     st.session_state.messages = [{
                         "role": "assistant", 
-                        "content": intro_text,
-                        "audio_b64": audio_b64
+                        "content": intro_text
                     }]
                     st.rerun()
                 else:
@@ -212,19 +207,6 @@ else:
                 with st.expander("🤖 GM Logic"):
                     st.json(message["debug_log"])
             st.markdown(message["content"])
-            
-            # --- AUDIO PLAYER (PCM to WAV conversion handled by browser/API) ---
-            if "audio_b64" in message and message["audio_b64"]:
-                # Note: Gemini TTS returns PCM16 usually, but for simplicity here we assume
-                # the browser can handle the base64 or we wrap it.
-                # If using the standard Vertex/Gemini REST API as in voice.py, 
-                # we are getting raw audio content.
-                audio_html = f"""
-                    <audio controls style="width: 100%;">
-                    <source src="data:audio/wav;base64,{message['audio_b64']}" type="audio/wav">
-                    </audio>
-                """
-                st.markdown(audio_html, unsafe_allow_html=True)
 
     if prompt := st.chat_input("What do you do?"):
         st.chat_message("user").markdown(prompt)
@@ -247,15 +229,11 @@ else:
                     name = i['name'] if isinstance(i, dict) else str(i)
                     st.toast(f"🎒 Acquired: {name}", icon="✨")
 
-            # --- NEW VOICE GENERATION ---
-            audio_b64 = generate_voice_audio(response_text)
-            
             save_game(new_state)
 
         st.session_state.messages.append({
             "role": "assistant", 
             "content": response_text,
-            "audio_b64": audio_b64,
             "debug_log": debug_log
         })
         st.rerun()
