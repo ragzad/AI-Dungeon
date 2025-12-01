@@ -5,39 +5,27 @@
         "hp": 20,
         "max_hp": 20,
         "inventory": [
-            "Old Map",
-            "Dagger",
-            "heavy, canvas pack",
-            "thick, blunted hunting knife",
-            "waterskin",
-            "iron rations",
-            "copper coins",
-            "faded, brittle map fragment",
-            "ornate silver locket"
-        ]
+            {
+                "name": "Old Map",
+                "description": "A faded, brittle map fragment.",
+                "state": "default"
+            },
+            {
+                "name": "Dagger",
+                "description": "A simple iron blade.",
+                "state": "dull"
+            }
+        ],
+        "journal": []
     },
-    "current_location_id": "scribe_loc_deck_of_a_brigantine",
+    "current_location_id": "loc_start",
     "world_flags": {
-        "game_started": true
+        "game_started": false
     },
     "locations": {
         "loc_start": {
-            "name": "The Beginning",
-            "description": "You stand in a gray void. To form the world, you must take an action. Will you draw a sword? Check your revolver? Or look at the stars?",
-            "exits": [
-                "forward"
-            ]
-        },
-        "scribe_loc_deck_of_a_brigantine": {
-            "name": "deck of a brigantine",
-            "description": "The weathered, rocking deck of a brigantine, where the player stands.",
-            "exits": [
-                "rocky island"
-            ]
-        },
-        "scribe_loc_rocky_island": {
-            "name": "rocky island",
-            "description": "A distant, jagged silhouette of a rocky island claws its way from the morning mist.",
+            "name": "The Void",
+            "description": "The unformed nothingness before creation.",
             "exits": []
         }
     },
@@ -47,7 +35,7 @@
         "global_tension": 1,
         "genre": "adaptive",
         "current_objective": "Establish the setting.",
-        "narrative_direction": "Describe the player's available items."
+        "narrative_direction": "Observe the player's tone to determine the genre."
     },
     "world_events": []
 }

@@ -9,13 +9,21 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def scan_story_for_entities(story_text, current_state):
     """
-    Reads the narrative text and extracts new entities that the Narrator invented.
+    Reads the narrative text and extracts new entities AND LORE.
     """
     model = genai.GenerativeModel(MODEL_NAME, 
         generation_config={"response_mime_type": "application/json"})
 
-    # Get lists of what we already know to avoid duplicates
-    existing_items = [i.lower() for i in current_state['player']['inventory']]
+    # --- INVENTORY HANDLING ---
+    raw_inventory = current_state['player'].get('inventory', [])
+    existing_items = []
+    for item in raw_inventory:
+        if isinstance(item, dict):
+            existing_items.append(item.get("name", "").lower())
+        else:
+            existing_items.append(str(item).lower())
+    # --------------------------
+
     existing_npcs = [n['name'].lower() for n in current_state['npcs'].values()]
     existing_locs = [l['name'].lower() for l in current_state['locations'].values()]
 
@@ -23,30 +31,25 @@ def scan_story_for_entities(story_text, current_state):
     You are The Scribe. You synchronize the Story with the Database.
     
     YOUR JOB:
-    Read the provided STORY TEXT. Identify any NEW Items, NPCs, or Locations.
+    Read the provided STORY TEXT. Identify new Items, NPCs, Locations, AND IMPORTANT LORE.
     
     RULES:
-    1. **Items:** If the text implies the player HAS an item add it.
-    2. **NPCs:** If a specific character is named add them.
-    3. **Locations:** If a specific landmark is named (e.g. "The Gallows Gambit"), add it.
-    4. **NO DUPLICATES:** Do not output entities that already exist in the lists provided.
-    5. **NO FLAVOR TEXT:** Do not add "The Sky" or "The Wind". Only tangible, interactive elements.
+    1. **Items/NPCs/Locations:** Only add if PHYSICALLY PRESENT.
+    2. **LORE (New!):** If the text reveals specific plot information, secrets, or history (e.g., "The Void Kin hate light", "The code is 0451"), extract it.
     
     OUTPUT SCHEMA:
     {
       "new_items": ["Item Name"],
-      "new_npcs": [{"name": "Name", "description": "Context from text", "status": "alive"}],
-      "new_locations": [{"name": "Name", "description": "Context from text"}]
+      "new_npcs": [{"name": "Name", "description": "Context", "presence": "physical"}],
+      "new_locations": [{"name": "Name", "description": "Context"}],
+      "new_lore": [{"topic": "Topic Name", "entry": "The specific fact learned."}]
     }
     """
 
     prompt = f"""
     {system_prompt}
     
-    EXISTING DATA (Ignore these):
-    Items: {existing_items}
-    NPCs: {existing_npcs}
-    Locations: {existing_locs}
+    EXISTING ENTITIES (Ignore): {existing_items}, {existing_npcs}, {existing_locs}
     
     STORY TEXT TO SCAN:
     "{story_text}"

@@ -35,8 +35,17 @@ def get_archivist_response(current_state, user_action):
     
     OUTPUT SCHEMA:
     {
-      "narrative_cue": "Description of the physical outcome.",
-      "npc_updates": { "npc_id": { "attitude": "hostile", "status": "active" } }
+  "narrative_cue": "Description of outcome",
+  "npc_updates": { "npc_id": { "status": "dead", "attitude": "fearful" } },
+  "location_updates": {
+       "loc_id": { 
+           "description": "The tavern is now a smoldering ruin.",
+           "remove_exits": ["upstairs"] 
+       }
+   },
+  "item_updates": {
+       "old_map": { "state": "torn", "description": "A map torn in half." }
+   }
     }
     """
 
@@ -70,7 +79,23 @@ def update_world_state(updates):
         if "hp" in p: state['player']['hp'] = p['hp']
         if "inventory_add" in p: 
             for i in p['inventory_add']: state['player']['inventory'].append(i)
-            
+    if "location_updates" in updates:
+        for loc_id, mutations in updates["location_updates"].items():
+            # Handle "Current Location" alias
+            if loc_id == "current": 
+                loc_id = state["current_location_id"]
+                
+            if loc_id in state["locations"]:
+                # Update description if provided
+                if "description" in mutations:
+                    state["locations"][loc_id]["description"] = mutations["description"]
+                # Handle exits changes
+                if "remove_exits" in mutations:
+                    state["locations"][loc_id]["exits"] = [
+                        e for e in state["locations"][loc_id]["exits"] 
+                        if e not in mutations["remove_exits"]
+                    ]        
+                                
     # Handle NPCs
     npc_source = updates.get("npcs") or updates.get("npc_updates")
     if npc_source:

@@ -12,44 +12,45 @@ def update_story_state(current_state, player_action, archivist_log):
         generation_config={"response_mime_type": "application/json"})
 
     story = current_state.get("story_state", {})
-    current_genre = story.get("genre", "adaptive")
+    current_objective = story.get("current_objective", "Explore")
     
-    # Check if we are currently in the void
-    in_void = current_state.get("current_location_id") == "loc_start"
-
     system_prompt = f"""
-    You are the Narrative Director.
+    You are the Narrative Director. You control the Pacing and Objectives of the game.
     
-    CURRENT GENRE: {current_genre}
-    IN VOID: {in_void}
+    CURRENT STATE:
+    - Objective: "{current_objective}"
+    - Genre: {story.get("genre", "Unknown")}
+    - Tension Level: {story.get("global_tension", 1)}/10
     
-    YOUR JOB:
-    Detect if the player is defining the setting/genre.
+    PLAYER INPUT:
+    - Action: "{player_action}"
+    - Consequence: "{archivist_log}"
     
-    CRITICAL RULE - GENESIS:
-    If the player defines who they are AND we are in the Void:
-    1. Set 'trigger_genesis': true
-    2. Set 'new_genre': The specific genre 
-    3. Set 'narrative_direction': "Describe the new setting."
+    YOUR TASK:
+    1. Analyze if the Player's Action has ADVANCED or CHANGED the Current Objective.
+    2. If the player is asking questions ("Who is here?", "Look around"), set the 'narrative_direction' to REVEAL details.
+    3. If the player is acting ("Attack", "Run"), set 'narrative_direction' to RESOLVE action.
     
-    INPUTS:
-    - Player Action: "{player_action}"
+    OBJECTIVE LOGIC:
+    - If the player fulfilled the current objective -> CREATE A NEW OBJECTIVE immediately.
+    - If the player is ignoring the objective -> ADAPT the objective to the players intent.
     
-    OUTPUT JSON:
+    OUTPUT SCHEMA:
     {{
-      "genre": "...",
-      "narrative_direction": "...",
-      "current_objective": "...",
-      "global_tension": 1,
-      "trigger_genesis": boolean  <-- THIS IS THE KEY
+      "current_objective": "Updated short-term goal (Max 10 words)",
+      "narrative_direction": "Instruction for the Narrator (e.g. 'Describe the monster appearing', 'Reveal a hidden door')",
+      "global_tension": Integer (1-10),
+      "world_events": [] 
     }}
     """
     
-    prompt = f"{system_prompt}"
-    
     try:
-        response = model.generate_content(prompt)
+        response = model.generate_content(system_prompt)
         return json.loads(response.text)
     except Exception as e:
         print(f"Director Error: {e}")
-        return story
+        return {
+            "current_objective": current_objective,
+            "narrative_direction": "Describe the scene.",
+            "global_tension": 1
+        }

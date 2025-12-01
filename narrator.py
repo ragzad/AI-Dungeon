@@ -10,58 +10,39 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 def narrate_scene(current_state, recent_action, archivist_log):
     model = genai.GenerativeModel(MODEL_NAME)
 
-    # Filter State (Fog of War)
     visible_location = current_state.get("locations", {}).get(current_state.get("current_location_id"), {})
-    
     story_state = current_state.get("story_state", {})
-    direction = story_state.get("narrative_direction", "Describe the scene.")
-    threat = story_state.get("active_threat", "None")
-    beat = story_state.get("current_beat", "setup")
-    tension = story_state.get("global_tension", 1)
-    world_events = current_state.get("world_events", [])
-    active_events = [e for e in world_events if e.get("status") == "active"]
-
-    events_context = "\n".join([f"- {e['name']}: {e['description']}" for e in active_events])
-
-    player_view = {
-        "visible_npcs": [f"{n['name']} ({n.get('attitude', 'neutral')})" for n in current_state.get("npcs", {}).values() 
-                         if n["location_id"] == current_state.get("current_location_id")]
-    }
-
+    direction = story_state.get("narrative_direction", "Describe the surroundings.")
+    active_events = [e for e in current_state.get("world_events", []) if e.get("status") == "active"]
+    
+    visible_npcs = []
+    for n in current_state.get("npcs", {}).values():
+        if n["location_id"] == current_state.get("current_location_id"):
+            visible_npcs.append(f"- {n['name']} ({n.get('attitude', 'neutral')})")
+            
     system_prompt = f"""
-    You are a Dungeon Master (DM) playing a game with a friend.
+    You are the Dungeon Master.
+    
+    PLAYER ACTION: "{recent_action}"
+    
+    *** CRITICAL OUTCOME (MUST INCLUDE THIS): ***
+    "{archivist_log}"
+    *********************************************
     
     CONTEXT:
-    - Director's Orders: "{direction}"
-    - Current Threat: {threat}
-    - CURRENT SITUATION (Include these in the scene!):{events_context}
-    YOUR ATTITUDE:
-    1. **YOU ARE NOT THE WORLD.** You are the storyteller. Do not get attached to your NPCs.
-    2. **"YES, AND..."** : If the player says "I am a Space Ork," do not say "No you aren't, you are in a void." 
-       - Say: "The void shatters around you! The illusion falls away. You stand in your heavy armor, holding a Choppa."
-    3. **ADAPTABILITY:** If the player ignores a detail, drop it. If they focus on a detail, expand it.
+    - Location: {visible_location.get("name", "Unknown")} ({visible_location.get("description", "")})
+    - DM Instruction: "{direction}"
+    - Visible NPCs: {visible_npcs}
     
-    STRICT RULES:
-    - If there are multiple active events, weave them together.
-    - Maintain continuity.
-    - Never block the player's creativity.
-    - If the player contradicts the current scene, assume the scene was an illusion or a dream and move to the new reality.
-    - Keep descriptions punchy and exciting.
-    - Ensure character relations are consistent
-    
-    INPUTS:
-    - Player Action: "{recent_action}"
-    - Physical Result: "{archivist_log}"
-    - Visible World: {json.dumps(player_view)}
-    
-    OUTPUT:
-    A responsive, improvisational narrative response.
+    GUIDELINES:
+    1. **PRIORITIZE THE OUTCOME:** The 'Critical Outcome' above comes from the game physics engine. If it says the player found 'Void Kin' lore, you MUST describe that discovery in detail. Do not summarize it away.
+    2. **ATMOSPHERE:** Be concrete. Describe sights, sounds, and smells.
+    3. **INTERACTIVITY:** End by hinting at what else the player can do.
+    4. **BREVITY:** Keep it punchy (3-4 sentences max), but do not cut out the Critical Outcome details.
     """
     
-    prompt = f"{system_prompt}"
-
     try:
-        response = model.generate_content(prompt)
+        response = model.generate_content(system_prompt)
         return response.text
-    except Exception as e:
-        return "The world shifts..."
+    except Exception:
+        return "The world is silent."

@@ -8,9 +8,10 @@ MODEL_NAME = 'models/gemini-2.5-flash'
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def create_new_entity(target_name, current_location, current_state=None):
-
-    # 1. EXTRACT GENRE
-    genre = "High Fantasy" # Default
+    """
+    Generates a new specific entity (Location, NPC, or Item) during gameplay.
+    """
+    genre = "High Fantasy"
     if current_state:
         genre = current_state.get("story_state", {}).get("genre", "adaptive")
 
@@ -38,44 +39,77 @@ def create_new_entity(target_name, current_location, current_state=None):
     }}
     """
     
-def generate_genesis_location(genre):
+    try:
+        response = model.generate_content(prompt)
+        return json.loads(response.text)
+    except Exception as e:
+        print(f"Creator Error: {e}")
+        return None
+
+def generate_full_scenario(user_prompt):
     """
-    Creates a starting location based on a genre.
+    Generates a complete starting state based on a user concept.
     """
     model = genai.GenerativeModel(MODEL_NAME, 
         generation_config={"response_mime_type": "application/json"})
 
-    prompt = f"""
-    You are the World Forger.
-    The player is starting a new game in the Genre: {genre}.
+    system_prompt = """
+    You are the World Architect. 
+    Your job is to initialize a text-adventure game state based on a theme.
     
-    YOUR JOB:
-    Create a detailed Starting Location (Hub).
+    INPUT: A theme or scenario idea.
     
-    EXAMPLES:
-    - Cyberpunk -> "Neon-Drenched Alley" or "Corporate Penthouse"
-    - Pirate -> "The Captain's Quarters" or "Port Royal Docks"
-    - Fantasy -> "The Old Tavern" or "King's Road"
-    
-    RULES:
-    1. Give it a specific name.
-    2. Visual Exits (not names).
+    OUTPUT: A JSON object containing:
+    1. genre: The specific sub-genre.
+    2. location: The starting room details.
+    3. player: A suitable character name and starting inventory (3-5 items).
+       - Inventory items MUST be objects with {name, description, state}.
+    4. intro_text: A gripping opening paragraph setting the scene.
     
     OUTPUT SCHEMA:
-    {{
-      "type": "location",
-      "id": "gen_start_loc",
-      "data": {{
-        "name": "Name of Place",
-        "description": "Atmospheric description.",
-        "exits": ["Visual description of exit 1"],
-        "suggested_exits": ["Visual description of exit 2"]
-      }}
-    }}
+    {
+      "genre": "String",
+      "location": {
+         "name": "String",
+         "description": "String",
+         "exits": ["String"],
+         "suggested_exits": ["String"]
+      },
+      "player": {
+         "name": "String",
+         "inventory": [
+            {"name": "Item Name", "description": "Desc", "state": "condition"}
+         ]
+      },
+      "intro_text": "String"
+    }
+    """
+    
+    prompt = f"""
+    {system_prompt}
+    USER SCENARIO IDEA: "{user_prompt}"
     """
     
     try:
         response = model.generate_content(prompt)
         return json.loads(response.text)
     except Exception as e:
+        print(f"Genesis Error: {e}")
         return None
+
+def generate_random_scenario_idea():
+    """
+    Asks the AI for a creative, unique premise for a game.
+    """
+    model = genai.GenerativeModel(MODEL_NAME)
+    prompt = """
+    Generate a creative, intriguing, and specific premise for a text adventure game. 
+    It can be sci-fi, fantasy, horror, or weird fiction.
+    Keep it to one short sentence. 
+    Example: "A noir detective searching for a stolen memory in a city floating on Venus."
+    """
+    try:
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception:
+        return "A time-traveler stuck in a loop during the fall of Rome."
