@@ -26,31 +26,50 @@ The project is split into several specialized "Agents" (Python modules) that han
 
 ## Project Structure
 
-AGENT WORKFLOW ARCHITECTURE
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'edgeLabelBackground':'#f9f9f9', 'tertiaryColor': '#e0e0e0', 'fontFamily': 'Helvetica', 'fontSize': '14px'}}}%%
+graph TD
+    %% Nodes
+    User([User Input])
+    GM{"Game Master<br/>(Orchestrator)"}
+    
+    subgraph Analysis & Logic
+        Cart["Cartographer<br/>(Movement & Map)"]:::agent
+        Arch["Archivist<br/>(Rules & State Delta)"]:::agent
+    end
+    
+    subgraph Content Generation
+        Crea["Creator<br/>(Entity Spawner)"]:::agent
+        Narr["Narrator<br/>(Storyteller)"]:::agent
+    end
+    
+    subgraph Data Persistence
+        Scribe["Scribe<br/>(Entity Extraction)"]:::agent
+        DB[("World State JSON")]:::db
+    end
 
-[User Input] 
-     │
-     ▼
-[Game Master] ─── (1) Check Movement? ──▶ [Cartographer]
-     │                                           │
-     │◀── (Map Data / Destination) ──────────────┘
-     │
-     │─── (If New Area Needed) ─────────▶ [Creator]
-     │
-     │─── (2) Calculate Physics/Logic ──▶ [Archivist]
-     │                                           │
-     │◀── (State Deltas: -HP, +Item) ────────────┘
-     │
-     │─── (3) Render Scene Text ────────▶ [Narrator]
-     │                                           │
-     │◀── (Narrative Prose) ─────────────────────┘
-     │
-     │─── (4) Extract New Entities ─────▶ [Scribe]
-     │                                           │
-     │◀── (New Database Entries) ────────────────┘
-     │
-     ▼
-[World State Database] (Updated JSON)
+    %% Flow
+    User -->|Action| GM
+    
+    GM -->|1. Check Movement| Cart
+    Cart -->|Destinations| GM
+    
+    GM -.->|If New Location| Crea
+    Crea -.->|New Location Data| GM
+    
+    GM -->|2. Calculate Outcome| Arch
+    Arch -->|HP/Inventory Updates| GM
+    
+    GM -->|3. Generate Text| Narr
+    Narr -->|Story Segment| GM
+    
+    GM -->|4. Scan for New Lore| Scribe
+    Scribe -->|New NPCs/Items| GM
+    
+    GM ==>|5. Final Save| DB
+
+    %% Styling
+    classDef agent fill:#f0f7ff,stroke:#0066cc,stroke-width:1px;
+    classDef db fill:#f9f9f9,stroke:#666,stroke-width:2px,stroke-dasharray: 5 5;
 
 ## Quick Start
 
