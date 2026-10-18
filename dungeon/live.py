@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import logging
+import re
 import uuid
 
 from google.adk.agents.live_request_queue import LiveRequestQueue
@@ -14,7 +15,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from . import agents, combat, config, dialogue, premise, state, world
+from . import agents, combat, config, dialogue, names, premise, state, world
 from .plugins import GamePlugin, is_quota_error
 from .state import GameError
 
@@ -38,6 +39,9 @@ class Hub:
         self.opening_runner = Runner(app_name="opening", agent=agents.opening_agent,
                                      session_service=InMemorySessionService(), plugins=[self.plugin])
         self.opening_runner.plugin_manager.set_skip_closing_plugins(True)
+        self.fixup_runner = Runner(app_name="fixup", agent=agents.fixup_agent,
+                                   session_service=InMemorySessionService(), plugins=[self.plugin])
+        self.fixup_runner.plugin_manager.set_skip_closing_plugins(True)
 
     def runner(self, model, live):
         key = (model, live)
@@ -55,20 +59,39 @@ class Hub:
         cache = config.CACHE_DIR / "openings" / f"{key}.json"
         if cache.exists():
             return json.loads(cache.read_text(encoding="utf-8"))
-        s = await self.opening_runner.session_service.create_session(app_name="opening", user_id=USER)
-        spec = None
-        async for event in self.opening_runner.run_async(
-                user_id=USER, session_id=s.id,
-                new_message=types.Content(role="user", parts=[types.Part(text=json.dumps({"premise": text}))])):
-            if event.content and event.content.parts and not event.partial:
-                out = "".join(p.text or "" for p in event.content.parts if not p.thought)
-                if out.strip():
-                    spec = json.loads(out)
+        spec = await self._ask(self.opening_runner, "opening", {"premise": text})
         if not isinstance(spec, dict):
             raise RuntimeError("the Creator returned no opening")
+        # one cheap second call if it came back short on monsters or with names to change
+        seen_file = config.CACHE_DIR / "names_seen.json"
+        need = premise.needs(spec, names.recall(seen_file))
+        if need:
+            log.info("opening needs a top-up: %s", need)
+            try:
+                fix = await self._ask(self.fixup_runner, "fixup", {
+                    "setting": f"{spec.get('setting_name')}: {spec.get('blurb')} Premise: {text}",
+                    "monsters_it_has": [f"{m.get('name')} ({m.get('archetype')}, tier {m.get('tier')})"
+                                        for m in spec.get("monsters") or [] if isinstance(m, dict)],
+                    "monsters_needed": need.get("monsters") or {}, "rename": need.get("rename") or {}})
+                spec = premise.merge_fixup(spec, fix, need.get("rename"))
+            except Exception as exc:
+                log.warning("opening top-up failed, repairing it here: %s", str(exc)[:200])
+        names.remember(seen_file, spec)
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(spec), encoding="utf-8")
         return spec
+
+    async def _ask(self, runner, app, payload):
+        s = await runner.session_service.create_session(app_name=app, user_id=USER)
+        result = None
+        async for event in runner.run_async(
+                user_id=USER, session_id=s.id,
+                new_message=types.Content(role="user", parts=[types.Part(text=json.dumps(payload, ensure_ascii=False))])):
+            if event.content and event.content.parts and not event.partial:
+                out = "".join(p.text or "" for p in event.content.parts if not p.thought)
+                if out.strip():
+                    result = json.loads(out)
+        return result
 
     async def create(self, g):
         session = await self.session_service.create_session(app_name=config.APP_NAME, user_id=USER, state=g)
@@ -163,6 +186,7 @@ class GameSession:
         self.model = None
         self.text_lock = asyncio.Lock()
         self.narration = []
+        self._turn_text = []
         self.turns = 0
         self.scribe_every = 3
         self.closed = False
@@ -255,8 +279,10 @@ class GameSession:
             if event.partial:
                 await self.send({"type": "token", "text": out.text, "author": event.author})
             else:
-                await self.send({"type": "final", "text": out.text, "author": event.author})
-                self.narration.append(out.text)
+                text = await self._guard(out.text)
+                await self.send({"type": "final", "text": text, "author": event.author})
+                self.narration.append(text)
+                self._turn_text.append(text)
         if event.content and event.content.parts:
             for part in event.content.parts:
                 if part.inline_data and (part.inline_data.mime_type or "").startswith("audio/"):
@@ -264,9 +290,11 @@ class GameSession:
                 elif part.text and not part.thought and not out:
                     # text models (fallback path) put text straight in content
                     kind = "token" if event.partial else "final"
-                    await self.send({"type": kind, "text": part.text, "author": event.author})
+                    text = part.text if event.partial else await self._guard(part.text)
+                    await self.send({"type": kind, "text": text, "author": event.author})
                     if not event.partial:
-                        self.narration.append(part.text)
+                        self.narration.append(text)
+                        self._turn_text.append(text)
             calls = event.get_function_calls()
             if calls:
                 log.info("tool calls: %s", [(c.name, c.args) for c in calls])
@@ -331,7 +359,8 @@ class GameSession:
         await self.push_state()
         if lines:
             await self.send({"type": "engine", "lines": lines})
-            await self.send_text("[engine] " + " ".join(lines) + f" Mode is now {g['mode']}.")
+            facts = (" " + combat.facts(g)) if g.get("combat") else ""
+            await self.send_text("[engine] " + " ".join(lines) + f" Mode is now {g['mode']}." + facts)
 
     async def push_state(self):
         g = await self.hub.game(self.sid)
@@ -339,7 +368,30 @@ class GameSession:
 
     # --- scribe ------------------------------------------------------------
 
+    async def _guard(self, text):
+        """Light guards on what the Game Master said. The voice has already gone out, but the
+        text on screen can be put right."""
+        if self.turns == 0:
+            g = await self.hub.game(self.sid)
+            if g["meta"].get("origin") != "loaded" and re.search(r"\bwelcome back\b", text, re.I):
+                log.info("guard: 'welcome back' on a new game")
+                text = re.sub(r"\b(W|w)elcome back\b", lambda m: m.group(1) + "elcome", text)
+        return text
+
+    async def _check_turn(self):
+        """After a combat turn, compare what was said against the real fight."""
+        said = " ".join(self._turn_text)
+        self._turn_text = []
+        if not said:
+            return
+        g = await self.hub.game(self.sid)
+        wrong = combat.check_claims(said, g)
+        if wrong:
+            log.info("guard: narration contradicts the fight: %s", wrong)
+            await self.send({"type": "notice", "level": "info", "text": "Rules check: " + " ".join(wrong)})
+
     async def _after_turn(self):
+        await self._check_turn()
         self.turns += 1
         if self.scribe_every and self.turns % self.scribe_every == 0 and self.narration:
             recent = " ".join(self.narration[-6:])
@@ -374,15 +426,21 @@ def opener(g, loaded=False):
     p = g["player"]
     loc = state.location(g)
     if loaded:
-        return (f"[start] {p['name']} has loaded a saved game. They are at {loc['name']} in {g['mode']} mode, "
-                f"{p['hp']}/{p['max_hp']} HP. Welcome them back and remind them where they are.")
+        return (f"[start loaded] {p['name']} has loaded a saved game. They are at {loc['name']} in {g['mode']} mode, "
+                f"{p['hp']}/{p['max_hp']} HP. Welcome them back and remind them where they are."
+                + (" " + combat.facts(g) if g.get("combat") else ""))
+    fresh = ("This is the very start of a brand-new game: they have just arrived, have never been here and "
+             "know nobody. Don't say welcome back or refer to earlier visits.")
     s = g["meta"].get("setting")
     if s:
-        giver = next((g["world"]["npcs"][q["giver"]] for q in g["world"]["quests"].values()), None)
+        giver = next((g["world"]["npcs"][q["giver"]] for q in g["world"]["quests"].values()
+                      if q["status"] != "locked"), None)
         hook = f" Hint that {giver['name']}, the {giver['role']}, might have work for them." if giver else ""
-        return (f"[start] New game in {s['name']}, built from the player's premise: \"{s['premise']}\". "
-                f"The player is {p['name']}. They are standing in {loc['name']}: {loc['desc']} "
+        weapon = state.item_info(p["equipped"]["weapon"], g)["name"] if p["equipped"].get("weapon") else None
+        kit = f" They carry their own {weapon}." if weapon else ""
+        return (f"[start new] New game in {s['name']}, built from the player's premise: \"{s['premise']}\". "
+                f"The player is {p['name']}. {fresh} They are standing in {loc['name']}: {loc['desc']}{kit} "
                 f"Set the scene in 2-3 sentences in the tone of the premise.{hook}")
-    return (f"[start] New game. The player is {p['name']}, a sellsword arriving in Emberfall. "
+    return (f"[start new] New game. The player is {p['name']}, a sellsword arriving in Emberfall. {fresh} "
             f"They are standing in {loc['name']}: {loc['desc']} Set the scene and hint that the tavern to the "
             f"north is where people talk.")

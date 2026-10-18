@@ -9,7 +9,7 @@ from google.adk.tools.agent_tool import AgentTool
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from . import config, content, forge, premise, tools
+from . import config, content, forge, names, premise, tools
 
 
 # --- specialists -----------------------------------------------------------
@@ -134,6 +134,19 @@ class QuestHook(BaseModel):
     reward_ability: Optional[GenAbility] = Field(None, description="a technique the giver teaches as a reward")
 
 
+class BossLair(BaseModel):
+    direction: str = Field(description="which opening place it lies beyond: the direction of that place from the start")
+    approach_name: str = Field(description="the dangerous stretch on the way to the boss")
+    approach_description: str = Field(description="2 sentences, concrete and sensory")
+    approach_encounter_text: str = Field(description="one sentence for when the guards on the way appear")
+    lair_name: str = Field(description="where the boss lives")
+    lair_description: str = Field(description="2 sentences, concrete and sensory")
+    boss_intro: str = Field(description="one sentence for when the boss appears")
+    gate_text: str = Field(description="one sentence of why a newcomer shouldn't go yet, in the world's own terms")
+    rumour: str = Field(description="one sentence locals say about the boss, which hints where it is")
+    quest_title: str = Field(description="a short title for the job of ending the boss")
+
+
 class StartPlaceCore(BaseModel):
     name: str
     description: str = Field(description="2-3 sentences, concrete and sensory, setting the tone.")
@@ -145,14 +158,29 @@ class Opening(BaseModel):
     setting_name: str = Field(description="Short name for the world or place the story is set in.")
     tone: str = Field(description="A few words on the mood, e.g. 'tense, witty, rain-soaked'.")
     blurb: str = Field(description="2 sentences of background the other storytellers need to stay consistent.")
-    starting_weapon: GenItem = Field(description="the player's own tier 1 weapon, suited to the setting")
-    items: list[GenItem] = Field(description="5-8 items native to this world across tiers: weapons, armour, a potion, a bomb or tonic, a trinket and a scroll")
-    monsters: list[GenMonster] = Field(description="4-6 monsters: 2-3 tier 1 for the opening, 1-2 tier 2, and one boss")
+    starting_weapon: GenItem = Field(description="the player's own tier 1 weapon, suited to the setting, with an "
+                                     "on_hit_status that fits it (a hook that bleeds, a torch that burns)")
+    starting_consumable: GenItem = Field(description="a tier 1 healing draught the player starts with, named and "
+                                         "flavoured for this world (archetype potion)")
+    items: list[GenItem] = Field(description="5-8 items native to this world across tiers: weapons, armour (one tier 2 "
+                                "piece), a potion, a bomb or tonic, a trinket and a scroll")
+    monsters: list[GenMonster] = Field(description="exactly 4-6 monsters: 2-3 tier 1 for the opening, 1-2 tier 2, and one boss (tier 2)")
+    boss_lair: BossLair = Field(description="where the boss lives: two steps beyond one of the opening places")
     start: StartPlaceCore
     places: list[StartPlace] = Field(description="2-3 places next to the start")
     npcs: list[StartNpc] = Field(description="2-3 people, at least one at the start")
     quest: QuestHook
     unexplored: list[ExitHint] = Field(description="1-2 ways from the start that lead somewhere not built yet")
+
+
+class Rename(BaseModel):
+    old: str
+    new: str = Field(description="a fresh name in the same style and setting")
+
+
+class Fixup(BaseModel):
+    monsters: list[GenMonster] = Field(description="the extra monsters asked for, no more")
+    renames: list[Rename] = Field(description="one new name for each name listed under rename")
 
 
 class ScribeNotes(BaseModel):
@@ -170,6 +198,14 @@ def _text_only(callback_context, llm_request):
 def _background_model():
     return Gemini(model=config.BACKGROUND_MODEL,
                   retry_options=types.HttpRetryOptions(initial_delay=1, attempts=2))
+
+
+NAMING = (
+    "Names: make them belong to this premise and nowhere else. Draw on the setting's own language, trades, "
+    "geography, religion and slang (a drowned city's people might be named for tides and saints; a starship's crew "
+    "for call signs and ranks). Mix forms: titles, nicknames, surnames, compound names. Avoid generic fantasy "
+    "names; never use any of these: " + ", ".join(names.COMMON) + ". No two things share a name."
+)
 
 
 dialogue_agent = LlmAgent(
@@ -207,7 +243,7 @@ creator_agent = LlmAgent(
         "number, so never write numbers. Keep new things at or below the danger tier. A new monster should play "
         "differently from the ones the world already has: a different archetype, damage type or signature.\n"
         "About half of places should have no encounter. Add an npc only sometimes (roughly one place in three). "
-        "Give people and monsters distinctive names that suit the setting, not stock fantasy names."
+        "Give people and monsters distinctive names that suit the setting.\n" + NAMING
     ),
     output_schema=NewPlace,
     before_model_callback=_text_only,
@@ -225,12 +261,28 @@ opening_agent = LlmAgent(
         "archetype, a tier and a few effect building blocks; the game turns those into numbers, so never write "
         "numbers or stats. Make the monsters fight differently from each other: mix archetypes, damage types, "
         "weaknesses and signature abilities (a caster that blinds, a swarm that poisons, a tank that wards itself, "
-        "a boss that summons). Put only tier 1 monsters in the opening places; the tougher ones and the boss wait "
-        "further out. Keep at least one place without foes. The quest giver should be at the start. Give people distinctive "
-        "names that suit the setting, not stock fantasy names like Elara or Silas. UK English. "
-        "Never mention game mechanics in descriptions."
+        "a boss that summons). Always make 4-6 monsters, and exactly one boss. Put only tier 1 monsters in the "
+        "opening places; the tougher ones wait further out, and the boss lives in its lair, two steps beyond one of "
+        "the opening places, which the quest hook should point towards. Keep at least one place without foes. The "
+        "quest giver should be at the start. The starting weapon and draught are the player's own, so make them "
+        "feel personal and of this world. UK English. Never mention game mechanics in descriptions.\n" + NAMING
     ),
     output_schema=Opening,
+    before_model_callback=_text_only,
+)
+
+fixup_agent = LlmAgent(
+    name="creator_fixup",
+    model=_background_model(),
+    description="Tops up an opening that came back short and renames anything too generic.",
+    instruction=(
+        "You patch the opening of a story game. The request gives the setting, the monsters it already has, how "
+        "many more monsters of each kind are needed, and names that need changing with the reason. Make exactly the "
+        "monsters asked for, native to the setting and different from the ones it has (archetype, damage type, "
+        "signature). A boss is archetype boss, tier 2. You pick names, flavour, archetype, tier and effect blocks; "
+        "never write numbers. For each name to change, give a new one in the same role and style.\n" + NAMING
+    ),
+    output_schema=Fixup,
     before_model_callback=_text_only,
 )
 
@@ -305,11 +357,14 @@ The world only changes through your tools. You must call a tool for moving, look
 
 There are three modes, and every tool result tells you the current mode.
 - exploration: describe, move, inspect, pick things up.
-- dialogue: when the player wants to talk to someone, call talk_to, then give one short greeting in that NPC's own voice (never ask the player what they want to say). While in dialogue, treat whatever the player says as spoken to that NPC: call say_to_npc with their words (approach persuade, intimidate or bribe if that is what they are doing). Then perform the NPC's line exactly as returned, in their voice, and stop. Never end a conversation yourself; only call end_conversation when the player says goodbye or walks off. Use trade for buying and selling.
-- combat: dice are rolled by the engine, never by you. When the player describes a combat move, call combat_action (attack, defend, item, flee, power_strike, second_wind, or any other ability the player has learned, by name). Monsters here can have unusual abilities, resistances and weaknesses; the log says when something is resisted or hits a weak spot, so make it vivid. Narrate the log you get back, hits and misses and what the enemies did, in 2-3 punchy sentences, and say whose turn it is. On victory, mention the loot. On defeat, describe the fall and tell them they can load a save.
+- dialogue: when the player wants to talk to someone, call talk_to, then give one sentence of narration, in your own voice, of that person noticing the player (never ask the player what they want to say). Never speak as an NPC from your own imagination: every word an NPC says comes from say_to_npc. While in dialogue, treat whatever the player says as spoken to that NPC: call say_to_npc with their words (approach persuade, intimidate or bribe if that is what they are doing). Then say npc_says word for word, in their voice, with at most a few words of narration before it (like "Maren snorts:"), and stop. Never summarise, shorten or reword their line, and never add a second line of your own for them. Never end a conversation yourself; only call end_conversation when the player says goodbye or walks off. Use trade for buying and selling.
+- combat: dice are rolled by the engine, never by you. When the player describes a combat move, call combat_action (attack, defend, item, flee, power_strike, second_wind, or any other ability the player has learned, by name). Monsters here can have unusual abilities, resistances and weaknesses. Every combat result and [engine] message carries a FACTS line with each fighter's real HP, AC, moves, resistances and weaknesses. Use only those facts and the log: never invent a resistance, immunity, weakness, number or ability, and if the facts say "resists: nothing", nothing shrugs anything off. When the log says something was resisted or hit a weak spot, make it vivid. Narrate the log you get back, hits and misses and what the enemies did, in 2-3 punchy sentences, and say whose turn it is. On victory, mention the loot. On defeat, describe the fall and tell them they can load a save.
 
 Messages that start with [engine] are things the player did with the on-screen buttons; the engine has already resolved them. Narrate the result in 1-3 sentences and do not call a tool for them.
-Messages that start with [start] mean a new or loaded game: greet the player by name and set the scene from the state given, in 2-3 sentences."""
+Messages that start with [start new] mean a brand-new game: the player has only just arrived, has never been here and has met nobody. Set the scene by name in 2-3 sentences. Never say "welcome back", "again" or "return", and never refer to earlier visits or events.
+Messages that start with [start loaded] mean a saved game was just loaded: welcome the player back by name and remind them where they are, in 2-3 sentences.
+
+SESSION"""
 
 
 GM_TOOLS = [tools.look_around, tools.move, tools.inspect, tools.take_item, tools.drop_item, tools.use_item,
@@ -317,9 +372,17 @@ GM_TOOLS = [tools.look_around, tools.move, tools.inspect, tools.take_item, tools
             tools.end_conversation, tools.attack, tools.combat_action]
 
 
+SESSION_NEW = ("This session started as a brand-new game: before it, the player had never been in this world. "
+               "Anything they know comes from this conversation.")
+SESSION_LOADED = "This session started from a loaded save, so the player has been in this world before."
+
+
 def gm_instruction(ctx):
-    # an instruction provider, so each game gets its own setting from session state
-    return GM_INSTRUCTION.replace("SETTING", premise.setting_text({"meta": ctx.state.get("meta")}), 1)
+    # an instruction provider, so each game gets its own setting and new/loaded context from session state
+    meta = ctx.state.get("meta") or {}
+    session = SESSION_LOADED if meta.get("origin") == "loaded" else SESSION_NEW
+    return (GM_INSTRUCTION.replace("SETTING", premise.setting_text({"meta": meta}), 1)
+            .replace("SESSION", session, 1).rstrip())
 
 
 def make_game_master(model_name, live=True):

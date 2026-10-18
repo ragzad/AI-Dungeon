@@ -99,6 +99,7 @@ async def load(body: LoadRequest):
         g = state.load_slot(config.SAVE_DIR, body.slot)
     except GameError as exc:
         raise HTTPException(404, str(exc))
+    g["meta"]["origin"] = "loaded"
     sid = await hub.create(g)
     _fresh.add((sid, True))
     return {"session_id": sid, "state": state.public_view(g)}
