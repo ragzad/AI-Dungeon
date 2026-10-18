@@ -34,7 +34,8 @@ def test_save_round_trip(tmp_path, g):
     loaded = state.load_slot(tmp_path, slot)
     assert loaded == json.loads(json.dumps(g))
     listing = state.list_slots(tmp_path)
-    assert listing[0]["slot"] == "my-save" and listing[0]["location"] == "Emberfall Square"
+    mine = next(x for x in listing if x["slot"] == "my-save")
+    assert mine["location"] == "Emberfall Square" and len(listing) == 2
 
 
 def test_load_rejects_bad_saves(tmp_path, g):

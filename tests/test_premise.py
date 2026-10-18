@@ -48,7 +48,7 @@ def test_clean_premise():
 
 
 def test_build_world_validates_the_opening():
-    w, setting = premise.build_world(json.loads(json.dumps(OPENING)))
+    w, setting, _ = premise.build_world(json.loads(json.dumps(OPENING)))
     locs = w["locations"]
     start = locs["start"]
     assert start["name"] == "Cloudside Docks" and start["visited"]
@@ -70,7 +70,7 @@ def test_quest_foe_is_placed_if_missing():
     spec = json.loads(json.dumps(OPENING))
     spec["places"][1]["encounter"] = []
     spec["quest"]["monster"] = "cinder_ghoul"
-    w, _ = premise.build_world(spec)
+    w, _, _ = premise.build_world(spec)
     placed = [l for l in w["locations"].values() if l.get("encounter")]
     assert placed and placed[0]["encounter"]["enemies"] == ["cinder_ghoul"]
 
@@ -78,7 +78,7 @@ def test_quest_foe_is_placed_if_missing():
 def test_find_quest_item_is_placed():
     spec = json.loads(json.dumps(OPENING))
     spec["quest"] = {"title": "The Ledger", "desc": "Find it.", "giver": "Old Tamsin", "kind": "find", "item": "bone_charm"}
-    w, _ = premise.build_world(spec)
+    w, _, _ = premise.build_world(spec)
     assert w["quests"]["hook"]["goal"] == {"type": "deliver", "item": "bone_charm", "to": "npc_old_tamsin"}
     assert any(i["id"] == "bone_charm" for l in w["locations"].values() for i in l["items"])
 
