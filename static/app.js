@@ -215,6 +215,15 @@
     const pct = max ? Math.max(0, Math.min(100, (cur / max) * 100)) : 0;
     return `<div class="bar ${cls}"><i style="width:${pct}%"></i></div>`;
   }
+  // "Old Mariner Harl" -> "Harl", "Light-Warden Sunder-Salt" -> "Sunder-Salt", "Maren Holt" -> "Maren"
+  const TITLES = new Set(["the", "old", "young", "brother", "sister", "father", "mother", "captain", "lady", "lord", "sir",
+    "dame", "master", "mistress", "doctor", "dr", "elder", "auntie", "uncle", "mariner", "chaplain", "warden", "keeper",
+    "sergeant", "abbot", "abbess", "prior", "cantor", "deacon", "overseer", "foreman", "matron", "saint", "madam"]);
+  function shortName(name) {
+    const words = name.split(/\s+/);
+    const isTitle = (w) => TITLES.has(w.toLowerCase().split("-").pop().replace(/[^a-z]/g, ""));
+    return words.find((w) => !isTitle(w)) || words[0];
+  }
   function tags(list) { return list && list.length ? `<span class="status-tags">${list.map((t) => `<span class="tag ${t.name}">${t.name}${t.amount ? " " + t.amount : ""}</span>`).join("")}</span>` : ""; }
 
   function renderHud(s) {
@@ -284,7 +293,7 @@
       (s.dialogue.sells || []).slice(0, 4).forEach((it) => chip(`Buy ${esc(it.name)} <b>${it.price}g</b>`, () => sendAction("trade", { trade: "buy", item: it.id })));
     } else if (s.mode === "exploration") {
       const loc = s.location;
-      loc.npcs.forEach((n) => chip(`Talk to ${esc(n.name.split(" ")[0])}`, () => sendText(`I go and talk to ${n.name}.`)));
+      loc.npcs.forEach((n) => chip(`Talk to ${esc(shortName(n.name))}`, () => sendText(`I go and talk to ${n.name}.`)));
       loc.exits.forEach((e) => chip(`${esc(cap(e.direction))} · ${esc(e.name)}`, () => sendText(`I head ${e.direction}${e.to ? " to " + e.name : ""}.`)));
       loc.items.forEach((i) => chip(`Take ${esc(i.name)}`, () => sendAction("take", { item: i.id })));
       loc.features.slice(0, 2).forEach((f) => chip(`Inspect ${esc(f)}`, () => sendText(`I take a closer look at the ${f}.`), "muted"));
@@ -399,7 +408,7 @@
       const [x, y] = pos(n);
       const here = id === s.location.id;
       dots += `<g class="node" data-id="${id}" data-name="${esc(n.name)}">
-        <circle cx="${x}" cy="${y}" r="${here ? 11 : 8}" fill="${here ? "#e0803a" : n.visited ? "#7a6450" : "#2a211b"}" stroke="${here ? "#f4c66b" : "#5a4838"}" stroke-width="2"/>
+        <circle cx="${x}" cy="${y}" r="${here ? 11 : 8}" fill="${here ? "#e0803a" : n.visited ? "#7a6450" : "#2a211b"}" stroke="${here ? "#f4c66b" : n.boss ? "#c0392b" : "#5a4838"}" stroke-width="2"/>${n.gate ? `<text x="${x}" y="${y + 4}" text-anchor="middle" font-size="9" fill="#c9a36a" font-family="system-ui">L${n.gate}</text>` : ""}
         <text x="${x}" y="${y + 26}" text-anchor="middle" font-size="11" fill="${here ? "#ece3d6" : n.visited ? "#a8998a" : "#6f6356"}" font-family="system-ui">${esc(n.name.length > 18 ? n.name.slice(0, 17) + "…" : n.name)}</text></g>`;
     });
     $("#map").innerHTML = `<svg viewBox="${-(Math.max(W, 320) - W) / 2} 0 ${Math.max(W, 320)} ${Math.max(H, 180)}" role="img" aria-label="Map">${lines}${dots}</svg>`;
