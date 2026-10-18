@@ -4,8 +4,8 @@ The Creator writes the opening (places, people, a quest hook) and this checks
 it against what the engine can actually run before anything goes in the save."""
 import re
 
-from . import content
-from .state import GameError, norm
+from . import content, forge
+from .state import GameError, item_info, monster_info, norm
 
 MAX_PREMISE = 300
 COMPASS = ("north", "east", "south", "west")
@@ -54,28 +54,77 @@ def _slug(prefix, name, taken):
     return out
 
 
-def _encounter(place):
-    foes = []
-    for e in (place.get("encounter") or [])[:2]:
-        t = e.get("template") if isinstance(e, dict) else e
-        if t in content.MONSTERS:
-            foes.append((t, _s(e.get("name") if isinstance(e, dict) else None, 40) or content.MONSTERS[t]["name"]))
-    if not foes:
+def _foes(world, place, names, budget, max_tier):
+    """Turn a place's encounter list into monster ids that fit the budget and tier."""
+    picked = []
+    for e in (place.get("encounter") or [])[:3]:
+        if isinstance(e, str):
+            ref, count = e, 1
+        else:
+            ref, count = e.get("monster") or e.get("template") or "", e.get("count") or 1
+        mid = forge.resolve_monster(world, ref, names)
+        if not mid:
+            continue
+        m = monster_info(mid, {"world": world})
+        if m.get("tier", 1) > max_tier:
+            continue
+        count = max(1, min(3 if m.get("archetype") == "swarm" else 2, int(count)))
+        override = _s(e.get("name"), 40) if isinstance(e, dict) else ""
+        picked += [(mid, m, override)] * count
+    kept = forge.fit_encounter([(mid, m) for mid, m, _ in picked], budget, max_tier)
+    names_out = []
+    for mid in kept:
+        hit = next(x for x in picked if x[0] == mid)
+        names_out.append(hit[2] or hit[1]["name"])
+    return kept, names_out
+
+
+def _encounter(world, place, names, budget=forge.ENCOUNTER_BUDGET[1], max_tier=1):
+    kept, names_out = _foes(world, place, names, budget, max_tier)
+    if not kept:
         return None
-    return {"enemies": [t for t, _ in foes], "names": [n for _, n in foes],
+    return {"enemies": kept, "names": names_out,
             "text": _s(place.get("encounter_text"), 200, "Something moves in the gloom.")}
 
 
+def _npc_template(world, n, nid, names):
+    ref = n.get("fights_as") or ""
+    mid = forge.resolve_monster(world, ref, names)
+    if mid and monster_info(mid, {"world": world}).get("archetype") != "boss":
+        return mid
+    arch = ref if ref in forge.MONSTER_ARCHETYPES and ref != "boss" else None
+    if not arch:
+        return "bandit"
+    world.setdefault("monsters", {})
+    world.setdefault("abilities", {})
+    tid, m = forge.make_monster({"name": n.get("name"), "archetype": arch, "tier": 1,
+                                 "abilities": n.get("abilities") or []}, 1, taken=world["monsters"])
+    m["npc"] = True
+    world["monsters"][tid] = m
+    return tid
+
+
 def build_world(spec):
-    """Validate a Creator opening and return (world, setting). Raises GameError if unusable."""
+    """Validate a Creator opening and return (world, setting, kit). Raises GameError if unusable."""
     start = spec.get("start") or {}
     name, desc = _s(start.get("name"), 60), _s(start.get("description"), 600)
     if not name or not desc:
         raise GameError("The opening had no starting place.")
-    locations = {"start": {"name": name, "desc": desc, "x": 0, "y": 0, "exits": {},
-                           "features": _features(start),
-                           "items": [{"id": i, "qty": 1} for i in (start.get("items") or [])[:2] if i in content.ITEMS],
-                           "npcs": [], "visited": True}}
+    world = {"locations": {}, "npcs": {}, "quests": {}}
+    item_names, monster_names = forge.register(world, spec.get("items") or [], spec.get("monsters") or [])
+    gen = {"world": world}
+
+    def items_at(refs, max_tier=1):
+        out = []
+        for ref in (refs or [])[:2]:
+            iid = forge.resolve_item(world, ref, item_names)
+            if iid and item_info(iid, gen).get("kind") != "quest" and item_info(iid, gen).get("tier", 1) <= max_tier:
+                out.append({"id": iid, "qty": 1})
+        return out
+
+    locations = world["locations"]
+    locations["start"] = {"name": name, "desc": desc, "x": 0, "y": 0, "exits": {}, "features": _features(start),
+                          "items": items_at(start.get("items")), "npcs": [], "visited": True}
     by_dir = {}
     for p in (spec.get("places") or [])[:3]:
         direction = norm(p.get("direction", ""))
@@ -85,10 +134,8 @@ def build_world(spec):
         lid = _slug("loc_", pname, locations)
         dx, dy = OFFSET[direction]
         loc = {"name": pname, "desc": pdesc, "x": dx, "y": dy, "exits": {OPPOSITE[direction]: "start"},
-               "features": _features(p),
-               "items": [{"id": i, "qty": 1} for i in (p.get("items") or [])[:2] if i in content.ITEMS],
-               "npcs": []}
-        enc = _encounter(p)
+               "features": _features(p), "items": items_at(p.get("items")), "npcs": []}
+        enc = _encounter(world, p, monster_names)
         if enc:
             loc["encounter"] = enc
             loc["danger"] = 1
@@ -102,14 +149,18 @@ def build_world(spec):
     if not any(l.get("rest") for l in locations.values()):
         locations["start"]["rest"] = True
 
-    npcs = {}
+    npcs = world["npcs"]
     for n in (spec.get("npcs") or [])[:3]:
         nname = _s(n.get("name"), 40)
         if not nname:
             continue
         nid = _slug("npc_", nname, npcs)
         where = by_dir.get(norm(n.get("where", "")), "start")
-        sells = [i for i in (n.get("sells") or [])[:4] if i in content.ITEMS and content.ITEMS[i]["kind"] != "quest"]
+        sells = []
+        for ref in (n.get("sells") or [])[:5]:
+            iid = forge.resolve_item(world, ref, item_names)
+            if iid and item_info(iid, gen)["kind"] not in ("quest",) and item_info(iid, gen).get("tier", 1) <= 2:
+                sells.append(iid)
         npcs[nid] = {
             "name": nname, "role": _s(n.get("role"), 60, "local"), "location_id": where,
             "personality": _s(n.get("personality"), 300), "voice": _s(n.get("voice"), 120),
@@ -119,14 +170,12 @@ def build_world(spec):
             "quests": [], "disposition": max(15, min(70, int(n.get("disposition") or 45))),
             "memory": [], "hostile": False, "alive": True, "met": False,
             "trades": {"sells": sells, "buys": bool(sells)},
-            "combat": {"template": n.get("fights_as") if n.get("fights_as") in content.MONSTERS else "bandit",
-                       "name": nname},
+            "combat": {"template": _npc_template(world, n, nid, monster_names), "name": nname},
         }
         locations[where]["npcs"].append(nid)
     if not npcs:
         raise GameError("The opening had nobody in it.")
 
-    quests = {}
     hook = spec.get("quest") or {}
     giver = next((nid for nid, n in npcs.items() if norm(n["name"]) == norm(hook.get("giver", ""))), next(iter(npcs)))
     npcs[giver]["disposition"] = max(npcs[giver]["disposition"], 45)
@@ -134,28 +183,36 @@ def build_world(spec):
     if title:
         q = {"title": title, "giver": giver, "status": "available", "desc": _s(hook.get("desc"), 300),
              "progress": 0, "reward": {"gold": 25, "xp": 60}}
-        item = hook.get("item")
-        if hook.get("kind") == "find" and item in content.ITEMS:
+        item = forge.resolve_item(world, hook.get("item") or "", item_names)
+        if hook.get("kind") == "find" and item:
             q["goal"] = {"type": "deliver", "item": item, "to": giver}
             # make sure the thing can actually be found
             if not any(i["id"] == item for l in locations.values() for i in l["items"]):
                 locations[next(iter(by_dir.values()))]["items"].append({"id": item, "qty": 1})
         else:
-            template = hook.get("monster")
+            template = forge.resolve_monster(world, hook.get("monster") or "", monster_names)
             fights = [(lid, l["encounter"]) for lid, l in locations.items() if l.get("encounter")]
-            if template not in content.MONSTERS:
-                template = fights[0][1]["enemies"][0] if fights else "bandit"
+            m = monster_info(template, gen) if template else None
+            if not m or m.get("tier", 1) > 1:
+                template = fights[0][1]["enemies"][0] if fights else None
+            if not template:
+                template = next((k for k, v in world["monsters"].items() if v["tier"] == 1 and not v.get("npc")), "bandit")
             count = sum(e["enemies"].count(template) for _, e in fights)
             if not count:
                 # the hook names a foe nobody placed, so put them somewhere
                 target = next((lid for lid in by_dir.values() if not locations[lid].get("encounter")),
                               next(iter(by_dir.values())))
-                locations[target]["encounter"] = {"enemies": [template], "names": [content.MONSTERS[template]["name"]],
+                mname = monster_info(template, gen)["name"]
+                locations[target]["encounter"] = {"enemies": [template], "names": [mname],
                                                   "text": "Someone is waiting for you."}
                 locations[target]["danger"] = 1
                 count = 1
             q["goal"] = {"type": "defeat", "template": template, "count": count}
-        quests["hook"] = q
+        if hook.get("reward_ability"):
+            ab = forge.make_ability(hook["reward_ability"], 1, owner="player", taken=world["abilities"])
+            world["abilities"][ab["id"]] = ab
+            q["reward"]["ability"] = ab["id"]
+        world["quests"]["hook"] = q
         npcs[giver]["quests"].append("hook")
 
     # leave the lazy Creator some room to grow the map
@@ -167,18 +224,34 @@ def build_world(spec):
         free = next(d for d in COMPASS if d not in locations["start"]["exits"])
         locations["start"]["exits"][free] = {"to": None, "hint": "a road leading somewhere you haven't been"}
 
+    # a starting weapon and potion of the world's own, if the Creator made them
+    kit = {}
+    starter = spec.get("starting_weapon")
+    if isinstance(starter, dict):
+        sid, sw, _ = forge.make_item({**starter, "tier": 1}, 1, taken=world["items"])
+        if sw and sw["kind"] == "weapon":
+            world["items"][sid] = sw
+            kit["weapon"] = sid
+    kit["potion"] = next((k for k, v in world["items"].items() if v.get("archetype") == "potion" and v["tier"] == 1), None)
+
     setting = {"name": _s(spec.get("setting_name"), 60, name), "tone": _s(spec.get("tone"), 120, "grounded"),
                "blurb": _s(spec.get("blurb"), 400)}
-    return {"locations": locations, "npcs": npcs, "quests": quests}, setting
+    return world, setting, kit
 
 
 def apply(g, premise, spec):
     """Swap a fresh game's world for one built from the premise."""
-    world, setting = build_world(spec)
+    world, setting, kit = build_world(spec)
     g["world"] = world
     g["meta"]["location_id"] = "start"
     g["meta"]["setting"] = {"premise": premise, **setting}
-    inv = g["player"]["inventory"]
+    p = g["player"]
     # the old map is a map of the Ashwood, which doesn't exist here
-    g["player"]["inventory"] = [i for i in inv if i["id"] != "old_map"] + [{"id": "lantern", "qty": 1}]
+    inv = [i for i in p["inventory"] if i["id"] != "old_map"] + [{"id": "lantern", "qty": 1}]
+    if kit.get("weapon"):
+        inv = [i for i in inv if i["id"] != "rusty_sword"] + [{"id": kit["weapon"], "qty": 1}]
+        p["equipped"]["weapon"] = kit["weapon"]
+    if kit.get("potion"):
+        inv = [i for i in inv if i["id"] != "healing_potion"] + [{"id": kit["potion"], "qty": 2}]
+    p["inventory"] = inv
     return g

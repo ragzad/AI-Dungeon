@@ -1,7 +1,7 @@
 """Exploration rules: moving, looking, items. The old Archivist's job, done in code."""
 from . import combat, content
-from .state import (GameError, add_item, inventory_options, item_info, journal, location,
-                    match, norm, npc, npcs_here, remove_item)
+from .state import (GameError, ability_info, add_item, inventory_options, item_info, journal, learn, location,
+                    match, norm, npc, npcs_here, refresh_abilities, remove_item)
 
 OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east",
             "up": "down", "down": "up", "in": "out", "out": "in"}
@@ -30,7 +30,7 @@ def describe(g):
         "description": loc["desc"],
         "exits": exits,
         "people": people,
-        "items_here": [item_info(i["id"])["name"] + (f" x{i['qty']}" if i["qty"] > 1 else "") for i in loc["items"]],
+        "items_here": [item_info(i["id"], g)["name"] + (f" x{i['qty']}" if i["qty"] > 1 else "") for i in loc["items"]],
         "things_to_inspect": list(loc.get("features", {}).keys()),
         "mode": g["mode"],
     }
@@ -109,6 +109,8 @@ def add_location(g, direction, spec):
         new_id, n = f"{base}_{n}", n + 1
     dx, dy = OFFSET.get(direction, (0, 1))
     back = OPPOSITE.get(direction, "back")
+    g["world"].setdefault("monsters", {})
+    g["world"].setdefault("items", {})
     exits = {back: here_id}
     for e in (spec.get("exits") or [])[:3]:
         ed = norm(e.get("direction", ""))
@@ -119,12 +121,21 @@ def add_location(g, direction, spec):
         key = norm(f.get("name", ""))[:30]
         if key:
             features[key] = str(f.get("description", ""))[:300]
-    items = [{"id": i, "qty": 1} for i in (spec.get("items") or [])[:2] if i in content.ITEMS]
-    loc = {"name": name, "desc": desc, "x": here["x"] + dx, "y": here["y"] + dy,
+    from . import forge, premise
+    x, y = here["x"] + dx, here["y"] + dy
+    tier = forge.location_tier(x, y, g["player"]["level"])
+    item_names, monster_names = forge.register(g["world"], spec.get("new_items") or [], spec.get("new_monsters") or [],
+                                               cap=tier)
+    items = []
+    for ref in (spec.get("items") or [])[:2]:
+        iid = forge.resolve_item(g["world"], ref, item_names)
+        if iid and item_info(iid, g).get("kind") != "quest" and item_info(iid, g).get("tier", 1) <= tier:
+            items.append({"id": iid, "qty": 1})
+    loc = {"name": name, "desc": desc, "x": x, "y": y, "tier": tier,
            "exits": exits, "features": features, "items": items, "npcs": [], "created": True}
-    enemies = [t for t in (spec.get("encounter") or [])[:2] if t in content.MONSTERS]
-    if enemies:
-        loc["encounter"] = {"enemies": enemies, "text": str(spec.get("encounter_text") or "Something moves in the gloom.")[:200]}
+    enc = premise._encounter(g["world"], spec, monster_names, budget=forge.ENCOUNTER_BUDGET[tier], max_tier=tier)
+    if enc:
+        loc["encounter"] = enc
     new_npc = spec.get("npc")
     if new_npc and new_npc.get("name"):
         nid = "npc_" + norm(new_npc["name"]).replace(" ", "_")[:24]
@@ -138,7 +149,7 @@ def add_location(g, direction, spec):
                 "quests": [], "disposition": max(10, min(70, int(new_npc.get("disposition", 45)))),
                 "memory": [], "hostile": False, "alive": True, "met": False,
                 "trades": {"sells": [], "buys": False},
-                "combat": {"template": new_npc.get("fights_as") if new_npc.get("fights_as") in content.MONSTERS else "bandit",
+                "combat": {"template": premise._npc_template(g["world"], new_npc, nid, monster_names),
                            "name": str(new_npc["name"])[:40]},
             }
             loc["npcs"].append(nid)
@@ -162,10 +173,10 @@ def inspect(g, target):
         from .state import attitude
         return {"person": n["name"], "role": n["role"], "seems": "hostile" if n["hostile"] else attitude(n["disposition"]),
                 "met_before": n["met"]}
-    here_items = {i["id"]: item_info(i["id"])["name"] for i in loc["items"]}
+    here_items = {i["id"]: item_info(i["id"], g)["name"] for i in loc["items"]}
     iid = match(target, here_items) or match(target, inventory_options(g))
     if iid:
-        info = item_info(iid)
+        info = item_info(iid, g)
         return {"item": info["name"], "detail": info["desc"]}
     raise GameError(f"You don't see any '{target}' here.")
 
@@ -174,7 +185,7 @@ def take(g, target):
     if g["mode"] == "combat":
         raise GameError("No time for that mid-fight.")
     loc = location(g)
-    options = {i["id"]: item_info(i["id"])["name"] for i in loc["items"]}
+    options = {i["id"]: item_info(i["id"], g)["name"] for i in loc["items"]}
     iid = match(target, options)
     if not iid:
         raise GameError(f"There's no '{target}' here to take.")
@@ -182,7 +193,7 @@ def take(g, target):
     remove_item(loc["items"], iid, qty)
     add_item(g["player"]["inventory"], iid, qty)
     g["meta"]["turn"] += 1
-    return {"took": item_info(iid)["name"], "qty": qty}
+    return {"took": item_info(iid, g)["name"], "qty": qty}
 
 
 def drop(g, target):
@@ -195,7 +206,7 @@ def drop(g, target):
         g["player"]["equipped"]["armour"] = None
     remove_item(g["player"]["inventory"], iid)
     add_item(location(g)["items"], iid)
-    return {"dropped": item_info(iid)["name"]}
+    return {"dropped": item_info(iid, g)["name"]}
 
 
 def use_item(g, target, d):
@@ -205,17 +216,49 @@ def use_item(g, target, d):
     iid = match(target, inventory_options(g))
     if not iid:
         raise GameError(f"You aren't carrying '{target}'.")
-    info = item_info(iid)
+    info = item_info(iid, g)
     p = g["player"]
-    if info["kind"] == "weapon":
-        p["equipped"]["weapon"] = iid
-        return {"equipped": info["name"], "damage": info.get("damage")}
-    if info["kind"] == "armour":
-        p["equipped"]["armour"] = iid
-        return {"equipped": info["name"]}
+    if info["kind"] in ("weapon", "armour", "trinket"):
+        slot = info.get("slot") or ("weapon" if info["kind"] == "weapon" else "armour")
+        old = p["equipped"].get(slot)
+        if old:
+            p["max_hp"] -= item_info(old, g).get("bonus", {}).get("max_hp", 0)
+        p["equipped"][slot] = iid
+        extra = info.get("bonus", {}).get("max_hp", 0)
+        p["max_hp"] += extra
+        p["hp"] = max(1, min(p["max_hp"], p["hp"] + extra))
+        out = {"equipped": info["name"], "slot": slot}
+        if info.get("stats") or info.get("damage"):
+            out["stats"] = info.get("stats") or info.get("damage")
+        return out
+    if info["kind"] == "scroll" and info.get("teaches"):
+        learned = learn(g, info["teaches"])
+        if not learned:
+            raise GameError("You already know what this teaches.")
+        remove_item(p["inventory"], iid)
+        return {"used": info["name"], "learned": learned, "ability": ability_info(info["teaches"], g)["desc"]}
     effect = info.get("effect") or {}
     if info.get("combat_only"):
         raise GameError(f"Save the {info['name']} for a fight.")
+    use = info.get("use")
+    if use:
+        heals = [b for b in use["blocks"] if b["kind"] == "heal"]
+        cures = any(b["kind"] == "cure" for b in use["blocks"])
+        if use["target"] != "self" or not (heals or cures):
+            raise GameError(f"Save the {info['name']} for a fight.")
+        if heals and not cures and p["hp"] >= p["max_hp"]:
+            raise GameError("You're already at full health.")
+        remove_item(p["inventory"], iid)
+        out = {"used": info["name"]}
+        if heals:
+            roll = d.roll(heals[0]["dice"])
+            out["healed"] = min(roll["total"], p["max_hp"] - p["hp"])
+            p["hp"] += out["healed"]
+        if cures:
+            p["status"] = [s for s in p["status"] if not content.STATUS[s["name"]].get("bad")]
+            out["cured"] = "everything"
+        out["hp"] = p["hp"]
+        return out
     if "heal" in effect:
         if p["hp"] >= p["max_hp"]:
             raise GameError("You're already at full health.")
@@ -245,7 +288,7 @@ def rest(g):
     p["gold"] -= 5
     p["hp"] = p["max_hp"]
     p["status"] = []
-    p["abilities"] = {k: v["max_uses"] for k, v in content.ABILITIES.items()}
+    refresh_abilities(g)
     g["meta"]["turn"] += 4
     journal(g, f"Rested at {loc['name']}.", "rest")
     return {"rested": True, "hp": p["hp"], "gold_left": p["gold"]}

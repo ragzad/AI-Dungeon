@@ -160,8 +160,9 @@ def attack(target: str, tool_context: ToolContext) -> dict:
 
 
 def combat_action(action: str, tool_context: ToolContext, target: str = "", item: str = "") -> dict:
-    """Take the player's turn in a fight. action is attack, defend, item, flee, power_strike or second_wind.
-    target is an enemy name (optional). item is needed for the item action."""
+    """Take the player's turn in a fight. action is attack, defend, item, flee, power_strike, second_wind,
+    or the name of any other ability the player knows (see their abilities). target is an enemy name
+    (optional). item is needed for the item action."""
     def go(g, d):
         result = combat.player_action(g, action, d, target=target or None, item=item or None)
         return {**result, "status": combat.summary(g)}

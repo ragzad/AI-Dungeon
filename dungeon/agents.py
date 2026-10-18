@@ -9,7 +9,7 @@ from google.adk.tools.agent_tool import AgentTool
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from . import config, content, premise, tools
+from . import config, content, forge, premise, tools
 
 
 # --- specialists -----------------------------------------------------------
@@ -35,6 +35,55 @@ class ExitHint(BaseModel):
     hint: str = Field(description="What the way onward looks like, without naming the destination.")
 
 
+ARCH_ITEMS = ", ".join(forge.ITEM_ARCHETYPES)
+ARCH_MONSTERS = ", ".join(forge.MONSTER_ARCHETYPES)
+TYPES = ", ".join(content.DAMAGE_TYPES)
+
+
+class Block(BaseModel):
+    kind: str = Field(description="one of: " + ", ".join(forge.BLOCKS) +
+                      ". damage/status/push/chain hit foes; heal/shield/cure/escape/summon are for yourself")
+    damage_type: Optional[str] = Field(None, description="for damage or chain: one of " + TYPES)
+    status: Optional[str] = Field(None, description="for status: on foes one of " + ", ".join(forge.BAD) +
+                                  "; on yourself one of " + ", ".join(forge.GOOD))
+
+
+class GenAbility(BaseModel):
+    name: str = Field(description="Evocative, fits the setting.")
+    description: str = Field(description="One sentence of flavour, no numbers.")
+    target: str = Field(description="enemy, all_enemies or self")
+    blocks: list[Block] = Field(description="1-3 building blocks. More blocks means each is weaker.")
+
+
+class GenItem(BaseModel):
+    name: str
+    description: str = Field(description="One sentence of flavour, no numbers.")
+    archetype: str = Field(description="one of: " + ARCH_ITEMS)
+    tier: int = Field(description="1 common, 2 fine, 3 rare")
+    damage_type: Optional[str] = Field(None, description="weapons, focuses and bombs: one of " + TYPES)
+    on_hit_status: Optional[str] = Field(None, description="weapons only, optional: " + ", ".join(forge.ON_HIT))
+    resist: Optional[str] = Field(None, description="armour or trinket only, optional: a non-physical damage type")
+    bonus: Optional[str] = Field(None, description="trinkets: hit, ac, max_hp or resist")
+    use: Optional[GenAbility] = Field(None, description="bombs, tonics and scrolls: what it does (a scroll teaches it)")
+
+
+class GenMonster(BaseModel):
+    name: str
+    description: str = Field(description="One sentence: what it looks like and how it fights.")
+    archetype: str = Field(description="one of: " + ARCH_MONSTERS)
+    tier: int = Field(description="1 for early fights, 2 tougher, 3 deadly. Bosses are 2 or 3.")
+    damage_type: str = Field(description="its normal attack, one of " + TYPES)
+    resist: Optional[str] = Field(None, description="optional, a non-physical damage type it shrugs off")
+    weak: Optional[str] = Field(None, description="a damage type that hurts it more. Needed if it resists anything.")
+    abilities: list[GenAbility] = Field(description="1-2 signature abilities")
+    loot: list[str] = Field(description="0-1 names of items from your items list it might drop")
+
+
+class EncounterRef(BaseModel):
+    monster: str = Field(description="name of a monster from the monsters list")
+    count: int = Field(description="1, or up to 3 for a swarm")
+
+
 class NewNpc(BaseModel):
     name: str
     role: str
@@ -43,7 +92,7 @@ class NewNpc(BaseModel):
     goals: list[str]
     secret: str
     disposition: int = Field(description="10-70, how they feel about strangers")
-    fights_as: str = Field(description="one of: " + ", ".join(content.MONSTERS))
+    fights_as: str = Field(description="if it comes to blows: a monster archetype (" + ARCH_MONSTERS + ") or a monster name")
 
 
 class NewPlace(BaseModel):
@@ -51,15 +100,12 @@ class NewPlace(BaseModel):
     description: str = Field(description="2-3 sentences, concrete and sensory.")
     features: list[Feature] = Field(description="1-3 things worth inspecting")
     exits: list[ExitHint] = Field(description="0-2 ways onward, not back the way the player came")
-    items: list[str] = Field(description="0-2 item ids from the allowed list")
-    encounter: list[str] = Field(description="0-2 monster ids from the allowed list, or empty if the place is safe")
+    new_monsters: list[GenMonster] = Field(description="0-1 new monsters native to this place")
+    new_items: list[GenItem] = Field(description="0-1 new items found here")
+    items: list[str] = Field(description="0-2 item names lying here (from the world's items or your new ones)")
+    encounter: list[EncounterRef] = Field(description="0-2 foes by name, or empty if the place is safe")
     encounter_text: str
     npc: Optional[NewNpc] = None
-
-
-class Foe(BaseModel):
-    template: str = Field(description="monster id from the allowed list; it decides the stats")
-    name: str = Field(description="what this foe is called in this setting, e.g. 'Sky Pirate'")
 
 
 class StartPlace(BaseModel):
@@ -67,15 +113,15 @@ class StartPlace(BaseModel):
     name: str
     description: str = Field(description="2-3 sentences, concrete and sensory.")
     features: list[Feature] = Field(description="1-2 things worth inspecting")
-    items: list[str] = Field(description="0-2 item ids from the allowed list")
-    encounter: list[Foe] = Field(description="0-2 foes, or empty if the place is safe")
+    items: list[str] = Field(description="0-2 names from your items list (tier 1 only)")
+    encounter: list[EncounterRef] = Field(description="0-2 tier 1 foes, or empty if the place is safe")
     encounter_text: str = Field(description="One sentence for when the foes appear. Empty if safe.")
     rest: bool = Field(description="True if the player could safely sleep here, like an inn")
 
 
 class StartNpc(NewNpc):
     where: str = Field(description="'start', or the direction of the place they are in")
-    sells: list[str] = Field(description="0-4 item ids they would sell, from the allowed list")
+    sells: list[str] = Field(description="0-4 names from your items list they would sell")
 
 
 class QuestHook(BaseModel):
@@ -83,21 +129,25 @@ class QuestHook(BaseModel):
     desc: str = Field(description="One or two sentences: what needs doing and why.")
     giver: str = Field(description="name of the npc who offers it")
     kind: str = Field(description="'defeat' (beat some foes) or 'find' (bring an item back to the giver)")
-    monster: Optional[str] = Field(None, description="for defeat: the monster id to beat; put them in a place")
-    item: Optional[str] = Field(None, description="for find: an item id from the allowed list")
+    monster: Optional[str] = Field(None, description="for defeat: name of a tier 1 monster; put it in a place")
+    item: Optional[str] = Field(None, description="for find: name of an item from your list")
+    reward_ability: Optional[GenAbility] = Field(None, description="a technique the giver teaches as a reward")
 
 
 class StartPlaceCore(BaseModel):
     name: str
     description: str = Field(description="2-3 sentences, concrete and sensory, setting the tone.")
     features: list[Feature] = Field(description="1-3 things worth inspecting")
-    items: list[str] = Field(description="0-1 item ids from the allowed list")
+    items: list[str] = Field(description="0-1 names from your items list")
 
 
 class Opening(BaseModel):
     setting_name: str = Field(description="Short name for the world or place the story is set in.")
     tone: str = Field(description="A few words on the mood, e.g. 'tense, witty, rain-soaked'.")
     blurb: str = Field(description="2 sentences of background the other storytellers need to stay consistent.")
+    starting_weapon: GenItem = Field(description="the player's own tier 1 weapon, suited to the setting")
+    items: list[GenItem] = Field(description="5-8 items native to this world across tiers: weapons, armour, a potion, a bomb or tonic, a trinket and a scroll")
+    monsters: list[GenMonster] = Field(description="4-6 monsters: 2-3 tier 1 for the opening, 1-2 tier 2, and one boss")
     start: StartPlaceCore
     places: list[StartPlace] = Field(description="2-3 places next to the start")
     npcs: list[StartNpc] = Field(description="2-3 people, at least one at the start")
@@ -150,11 +200,14 @@ creator_agent = LlmAgent(
     description="Builds a new location when the player goes somewhere unexplored.",
     instruction=(
         "You build one new location for a story game. The request gives the setting, where the player is coming "
-        "from, the direction and what the way looked like. Make a place that fits that description, the setting "
-        "and its tone.\n"
-        f"Allowed item ids: {', '.join(content.ITEMS)}.\n"
-        f"Allowed monster ids: {', '.join(content.MONSTERS)}. About half of places should have no encounter. "
-        "Add an npc only sometimes (roughly one place in three)."
+        "from, the direction, what the way looked like, the danger tier of the new place, and the monsters and "
+        "items this world already has. Make a place that fits that description, the setting and its tone.\n"
+        "You can reuse the world's monsters and items by name, or invent at most one new monster and one new item "
+        "native to this place. You pick names, flavour, archetype, tier and effect blocks; the game sets every "
+        "number, so never write numbers. Keep new things at or below the danger tier. A new monster should play "
+        "differently from the ones the world already has: a different archetype, damage type or signature.\n"
+        "About half of places should have no encounter. Add an npc only sometimes (roughly one place in three). "
+        "Give people and monsters distinctive names that suit the setting, not stock fantasy names."
     ),
     output_schema=NewPlace,
     before_model_callback=_text_only,
@@ -167,11 +220,13 @@ opening_agent = LlmAgent(
     instruction=(
         "You build the opening of a story game from the premise the player wrote. Make a starting place, 2-3 places "
         "around it, 2-3 people with clear personalities and wants, and one quest hook, all fitting the premise and "
-        "its tone. The game has simple rules underneath, so you can only use these:\n"
-        f"Allowed item ids: {', '.join(content.ITEMS)}. Describe them however suits the setting.\n"
-        f"Allowed monster ids (they decide the stats, you choose the name): "
-        + "; ".join(f"{k} ({v['name']}, {v['hp']} hp, {v['ai']})" for k, v in content.MONSTERS.items()) + ".\n"
-        "Keep at least one place without foes. The quest giver should be at the start. Give people distinctive "
+        "its tone.\n"
+        "Invent this world's own gear and monsters too. For each you write the name and flavour and choose an "
+        "archetype, a tier and a few effect building blocks; the game turns those into numbers, so never write "
+        "numbers or stats. Make the monsters fight differently from each other: mix archetypes, damage types, "
+        "weaknesses and signature abilities (a caster that blinds, a swarm that poisons, a tank that wards itself, "
+        "a boss that summons). Put only tier 1 monsters in the opening places; the tougher ones and the boss wait "
+        "further out. Keep at least one place without foes. The quest giver should be at the start. Give people distinctive "
         "names that suit the setting, not stock fantasy names like Elara or Silas. UK English. "
         "Never mention game mechanics in descriptions."
     ),
@@ -215,8 +270,21 @@ async def ask_creator(tool_context, origin, direction, hint):
     cache = config.CACHE_DIR / "places" / f"{key}.json"
     if cache.exists():
         return json.loads(cache.read_text(encoding="utf-8"))
+    world = tool_context.state.get("world") or {}
+    meta = tool_context.state.get("meta") or {}
+    here = (world.get("locations") or {}).get(meta.get("location_id"), {})
+    dx, dy = {"north": (0, -1), "south": (0, 1), "east": (1, 0), "west": (-1, 0)}.get(direction, (0, 1))
+    level = (tool_context.state.get("player") or {}).get("level", 1)
+    tier = forge.location_tier(here.get("x", 0) + dx, here.get("y", 0) + dy, level)
+    catalogue = {
+        "monsters": [f"{m['name']} ({m['archetype']}, tier {m['tier']})" for m in (world.get("monsters") or {}).values()
+                     if not m.get("npc")] or list(content.MONSTERS),
+        "items": [f"{i['name']} ({i['archetype']}, tier {i['tier']})" for i in (world.get("items") or {}).values()]
+        or [k for k, v in content.ITEMS.items() if v["kind"] != "quest"],
+    }
     request = json.dumps({"setting": setting, "coming_from": origin, "direction": direction,
-                          "the_way_looked_like": hint}, ensure_ascii=False)
+                          "the_way_looked_like": hint, "danger_tier": tier, "this_world_has": catalogue},
+                         ensure_ascii=False)
     result = await creator_tool.run_async(args={"request": request}, tool_context=tool_context)
     if not isinstance(result, dict):
         raise RuntimeError(f"creator returned {str(result)[:200]}")
@@ -238,7 +306,7 @@ The world only changes through your tools. You must call a tool for moving, look
 There are three modes, and every tool result tells you the current mode.
 - exploration: describe, move, inspect, pick things up.
 - dialogue: when the player wants to talk to someone, call talk_to, then give one short greeting in that NPC's own voice (never ask the player what they want to say). While in dialogue, treat whatever the player says as spoken to that NPC: call say_to_npc with their words (approach persuade, intimidate or bribe if that is what they are doing). Then perform the NPC's line exactly as returned, in their voice, and stop. Never end a conversation yourself; only call end_conversation when the player says goodbye or walks off. Use trade for buying and selling.
-- combat: dice are rolled by the engine, never by you. When the player describes a combat move, call combat_action (attack, defend, item, flee, power_strike, second_wind). Narrate the log you get back, hits and misses and what the enemies did, in 2-3 punchy sentences, and say whose turn it is. On victory, mention the loot. On defeat, describe the fall and tell them they can load a save.
+- combat: dice are rolled by the engine, never by you. When the player describes a combat move, call combat_action (attack, defend, item, flee, power_strike, second_wind, or any other ability the player has learned, by name). Monsters here can have unusual abilities, resistances and weaknesses; the log says when something is resisted or hits a weak spot, so make it vivid. Narrate the log you get back, hits and misses and what the enemies did, in 2-3 punchy sentences, and say whose turn it is. On victory, mention the loot. On defeat, describe the fall and tell them they can load a save.
 
 Messages that start with [engine] are things the player did with the on-screen buttons; the engine has already resolved them. Narrate the result in 1-3 sentences and do not call a tool for them.
 Messages that start with [start] mean a new or loaded game: greet the player by name and set the scene from the state given, in 2-3 sentences."""

@@ -1,6 +1,6 @@
 """Conversation rules. The Dialogue agent writes the words; this decides what they do."""
 from . import combat
-from .state import (GameError, add_item, attitude, inventory_options, item_info, journal, location,
+from .state import (GameError, learn, add_item, attitude, inventory_options, item_info, journal, location,
                     match, npc, npcs_here, remove_item)
 from .world import end_dialogue
 
@@ -42,7 +42,7 @@ def brief(g, nid):
                                     for s in n["secrets"] if s["id"] not in n.get("shared", [])],
         "quests_you_can_offer": [{"id": qid, "title": q["title"], "desc": q["desc"]}
                                  for qid, q in quests.items() if q["status"] == "available"],
-        "sells": [{"id": i, "name": name, "price": price(g, nid, i)} for i, name in stock(n).items()],
+        "sells": [{"id": i, "name": name, "price": price(g, nid, i)} for i, name in stock(n, g).items()],
         "player": {"name": g["player"]["name"], "level": g["player"]["level"], "gold": g["player"]["gold"]},
         "location": location(g)["name"],
     }
@@ -135,15 +135,15 @@ def start_fight(g, nid, d, intro):
     return {"events": fight["events"], "status": combat.summary(g)}
 
 
-def stock(n):
+def stock(n, g=None):
     """Shop goods are unlimited; one-off things (quest items) only while the NPC still has them."""
     carries = {c["id"] for c in n.get("carries", [])}
-    return {i: item_info(i)["name"] for i in n["trades"]["sells"]
-            if item_info(i)["kind"] != "quest" or i in carries}
+    return {i: item_info(i, g)["name"] for i in n["trades"]["sells"]
+            if item_info(i, g)["kind"] != "quest" or i in carries}
 
 
 def price(g, nid, item_id):
-    base = item_info(item_id)["price"]
+    base = item_info(item_id, g)["price"]
     disp = npc(g, nid)["disposition"]
     factor = 0.8 if disp >= 75 else (1.25 if disp < 35 else 1.0)
     return max(1, round(base * factor))
@@ -158,20 +158,20 @@ def trade(g, action, item):
     action = (action or "").lower()
     if action == "buy":
         carries = {c["id"] for c in n.get("carries", [])}
-        goods = stock(n)
+        goods = stock(n, g)
         iid = item if item in goods else match(item, goods)
         if not iid:
             raise GameError(f"{n['name']} doesn't sell that. They sell: {', '.join(goods.values()) or 'nothing'}.")
         cost = price(g, nid, iid)
         if p["gold"] < cost:
-            raise GameError(f"The {item_info(iid)['name']} costs {cost} gold and you have {p['gold']}.")
+            raise GameError(f"The {item_info(iid, g)['name']} costs {cost} gold and you have {p['gold']}.")
         p["gold"] -= cost
         if iid in carries:
             remove_item(n["carries"], iid)
             n["trades"]["sells"] = [i for i in n["trades"]["sells"] if i != iid]
         add_item(p["inventory"], iid)
         n["disposition"] = min(100, n["disposition"] + 2)
-        return {"bought": item_info(iid)["name"], "cost": cost, "gold_left": p["gold"]}
+        return {"bought": item_info(iid, g)["name"], "cost": cost, "gold_left": p["gold"]}
     if action == "sell":
         if not n["trades"].get("buys"):
             raise GameError(f"{n['name']} isn't buying.")
@@ -180,10 +180,10 @@ def trade(g, action, item):
             raise GameError(f"You aren't carrying '{item}'.")
         if p["equipped"].get("weapon") == iid and sum(i["qty"] for i in p["inventory"] if i["id"] == iid) == 1:
             raise GameError("You'd be selling the sword out of your hand. Unequip it first.")
-        value = max(1, item_info(iid)["price"] // 2)
+        value = max(1, item_info(iid, g)["price"] // 2)
         remove_item(p["inventory"], iid)
         p["gold"] += value
-        return {"sold": item_info(iid)["name"], "for": value, "gold": p["gold"]}
+        return {"sold": item_info(iid, g)["name"], "for": value, "gold": p["gold"]}
     raise GameError("Trade action must be buy or sell.")
 
 
@@ -197,7 +197,7 @@ def give(g, who, item):
     n = npc(g, nid)
     remove_item(g["player"]["inventory"], iid)
     add_item(n.setdefault("carries", []), iid)
-    result = {"gave": item_info(iid)["name"], "to": n["name"]}
+    result = {"gave": item_info(iid, g)["name"], "to": n["name"]}
     for qid, q in g["world"]["quests"].items():
         goal = q["goal"]
         if goal["type"] == "deliver" and goal["item"] == iid and goal["to"] == nid and q["status"] in ("available", "active", "ready"):
@@ -206,7 +206,7 @@ def give(g, who, item):
     if turned:
         result["quests_turned_in"] = turned
     else:
-        n["disposition"] = min(100, n["disposition"] + (5 if item_info(iid)["price"] >= 5 else 1))
+        n["disposition"] = min(100, n["disposition"] + (5 if item_info(iid, g)["price"] >= 5 else 1))
     return result
 
 
@@ -222,5 +222,11 @@ def turn_in(g, nid):
             npc(g, nid)["disposition"] = min(100, npc(g, nid)["disposition"] + r["disposition"])
         combat.gain_xp(g, r.get("xp", 0))
         journal(g, f"Completed {q['title']}. Reward: {r.get('gold', 0)} gold, {r.get('xp', 0)} XP.", "quest")
-        done.append({"quest": q["title"], **r})
+        entry = {"quest": q["title"], **r}
+        if r.get("item"):
+            add_item(g["player"]["inventory"], r["item"])
+            entry["item"] = item_info(r["item"], g)["name"]
+        if r.get("ability"):
+            entry["learned"] = learn(g, r["ability"])
+        done.append(entry)
     return done

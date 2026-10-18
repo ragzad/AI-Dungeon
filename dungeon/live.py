@@ -104,16 +104,31 @@ class Hub:
         return result, g
 
 
+def _used_line(name, r):
+    if "equipped" in r:
+        return f"{name} equips the {r['equipped']}" + (f" ({r['stats']})." if r.get("stats") else ".")
+    if "learned" in r:
+        return f"{name} studies the {r['used']} and learns {r['learned']}: {r['ability']}."
+    if "healed" in r:
+        return f"{name} uses the {r['used']} and recovers {r['healed']} HP."
+    if "cured" in r:
+        return f"{name} uses the {r['used']} and shakes off what ailed them."
+    return f"{name} looks over the {r.get('item') or r.get('used')}."
+
+
 def button_action(g, d, msg):
     """Buttons on the screen. Returns lines for the Game Master to narrate."""
     kind = msg.get("action")
     if kind in combat.ACTIONS or kind == "use_item":
+        if kind == "ability" and g["mode"] != "combat":
+            raise GameError("Abilities are for fights.")
         if g["mode"] != "combat":
             if kind in ("item", "use_item"):
                 r = world.use_item(g, msg.get("item") or "", d)
-                return [f"{g['player']['name']} used {r.get('used') or r.get('equipped') or r.get('item')}: {json.dumps(r)}"]
+                return [_used_line(g["player"]["name"], r)]
             raise GameError("You aren't in a fight.")
-        r = combat.player_action(g, kind, d, target=msg.get("target"), item=msg.get("item"))
+        r = combat.player_action(g, kind, d, target=msg.get("target"), item=msg.get("item"),
+                                 ability=msg.get("ability"))
         return [e["text"] for e in r["events"]] + [combat.summary(g)]
     if kind == "end_conversation":
         if g["mode"] != "dialogue":
