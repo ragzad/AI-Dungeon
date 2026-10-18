@@ -2,7 +2,7 @@
 
 A small dark fantasy game you play by talking to a Game Master. It speaks back out loud in real time, you can type or use your mic, and underneath it there's a proper rules engine, so fights, dice and NPC relationships are actually tracked rather than made up by the model.
 
-You start in Emberfall, a village at the edge of a forest that burned and never quite stopped. There are a few people to talk to, a couple of quests, wolves at the edge of the woods, and new places get built as you walk into them.
+On the start screen you can describe the adventure you want, like "a heist in a floating city" or "a haunted lighthouse", and the game builds an opening around it: where you start, who's there, what they want and a first job. Or leave it blank (or tap "Surprise me") and you start in Emberfall, a village at the edge of a forest that burned and never quite stopped. There are a few people to talk to, a couple of quests, wolves at the edge of the woods, and new places get built as you walk into them.
 
 ![Exploring](docs/01-explore.png)
 
@@ -23,6 +23,14 @@ The first version was a Streamlit app where five agents passed a JSON file aroun
 | ![Dialogue](docs/02-dialogue.png) | ![Combat](docs/03-combat.png) | ![Victory](docs/04-victory-or-journal.png) |
 
 It's built phone first. On a phone the chat takes the whole screen, the combat buttons sit above the input where your thumb is, and the character sheet, map and journal slide out from the side.
+
+| Your premise | The opening it builds |
+| --- | --- |
+| ![Premise](docs/05-premise.png) | ![Premise opening](docs/06-premise-opening.png) |
+
+| Your premise | The opening it builds |
+| --- | --- |
+| ![Phone premise](docs/m05-premise.png) | ![Phone premise opening](docs/m06-premise-opening.png) |
 
 | Exploring | Talking | Fighting |
 | --- | --- | --- |
@@ -53,6 +61,7 @@ flowchart TD
 - **World keeper** is the old Archivist idea, done in code instead of a prompt (`dungeon/world.py`). Moving, inspecting, picking up, resting and skill checks are all validated against the state, so "I pick up the tavern" just fails.
 - **Dialogue agent** plays one NPC at a time. It gets that NPC's personality, goals, what they remember about you, how much they like you (0 to 100), the secrets they could share and the quests they could offer. It replies with a line plus structured choices: how their opinion changes, whether they share a secret, offer a quest or turn hostile. `dungeon/dialogue.py` then applies those within the rules. A secret only comes out if they like you enough (or you just passed a persuade roll), and "turn hostile" is ignored unless the relationship has actually gone bad. Persuade and intimidate are real d20 rolls against your stats, and a bribe costs real gold.
 - **Combat engine** (`dungeon/combat.py`) is plain Python: initiative, AC, to-hit and damage rolls, crits on a natural 20, Defend, items, Power Strike and Second Wind, Flee as a Dex check, status effects (poisoned, burning, bleeding, stunned), enemies picking their own moves, then XP, loot and levelling. The dice are seeded and the roll count is saved, so loading a save carries on with the same sequence. The model only narrates the log.
+- **Your premise** goes to the Creator first. It writes the opening (a starting place, two or three places around it, two or three people, a quest hook and a short note on setting and tone), and `dungeon/premise.py` checks all of it before it goes into the game: unknown items and monsters are dropped, the quest's target is made sure to exist, and there's always somewhere to rest. Monsters keep their stats but get names that fit, so a bandit can be a Guild Enforcer. The premise and setting live in the session state, so saves keep them, and the Game Master, Dialogue agent and Creator all get told about it every time, in Live mode and in the text fallback. If the Creator can't build it (quota, or no key), you start in Emberfall and get told why.
 - **Creator** builds a new location when you walk through an unexplored exit. It can only use items and monsters the engine already knows about, so it can't invent a monster with 900 HP. Results are cached on disk, so the same lane builds the same place without another API call.
 - **Scribe** runs every few turns in the background and adds short story notes to the journal. Quest and combat entries come straight from the engine.
 
@@ -104,7 +113,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-There are 80 tests. They cover the dice, combat rules (initiative, hits, crits, Defend, status effects, abilities, items, fleeing, victory, defeat, loot and levelling), moving between the three modes, NPC disposition, secrets, quests, trading and hostility, the ADK tools with the Dialogue and Creator agents faked, saving and loading, the HTTP endpoints and the quota fallbacks. Gemini is never called, and the key is removed from the environment during the run so nothing can reach it by accident. Coverage of the engine modules is around 90%.
+There are 96 tests. They cover the dice, combat rules (initiative, hits, crits, Defend, status effects, abilities, items, fleeing, victory, defeat, loot and levelling), moving between the three modes, building a world from a premise (and falling back when that fails), NPC disposition, secrets, quests, trading and hostility, the ADK tools with the Dialogue and Creator agents faked, saving and loading, the HTTP endpoints and the quota fallbacks. Gemini is never called, and the key is removed from the environment during the run so nothing can reach it by accident. Coverage of the engine modules is around 90%.
 
 ## Known limitations
 
@@ -114,3 +123,5 @@ There are 80 tests. They cover the dice, combat rules (initiative, hits, crits, 
 - The Game Master occasionally paraphrases an NPC instead of reading their line exactly, and now and then greets you as the NPC itself before the Dialogue agent is involved.
 - Sessions live in memory, so restarting the server ends any game that hasn't been saved. Saves are JSON files in `saves/`, and there's no login, so anyone who can reach the server can see the list.
 - There's one character class and the world is small: four hand-made places plus whatever the Creator builds.
+- Openings are cached by premise to save quota, so typing exactly the same premise again gives you the same world. Change a word to get a new one.
+- A premise world still runs on the same rules and the same dozen items and four monster types underneath, renamed to fit. A sci-fi premise works, but your sword is still a sword.
