@@ -22,7 +22,7 @@ def new_game(name="Wren", seed=None):
     return {
         "meta": {"version": VERSION, "turn": 0, "created": int(time.time()),
                  "rng": {"seed": seed if seed is not None else random.randrange(1 << 30), "count": 0},
-                 "location_id": "square", "prev_location_id": None, "log": []},
+                 "location_id": "square", "prev_location_id": None, "log": [], "setting": None},
         "mode": "exploration",
         "player": content.new_player(name),
         "world": content.new_world(),
@@ -219,19 +219,27 @@ def public_view(g):
     return {
         "mode": g["mode"],
         "turn": g["meta"]["turn"],
+        "setting": _setting_view(g),
         "player": player,
         "location": {"id": loc_id, "name": loc["name"], "desc": loc["desc"], "exits": exits,
                      "items": [{"id": i["id"], "name": item_info(i["id"])["name"], "qty": i["qty"]} for i in loc["items"]],
                      "npcs": [{"id": nid, "name": npc(g, nid)["name"], "role": npc(g, nid)["role"],
                                "attitude": "hostile" if npc(g, nid)["hostile"] else attitude(npc(g, nid)["disposition"])}
                               for nid in loc["npcs"] if npc(g, nid)["alive"]],
-                     "features": list(loc.get("features", {}).keys())},
+                     "features": list(loc.get("features", {}).keys()), "rest": bool(loc.get("rest"))},
         "map": known,
         "combat": g["combat"],
         "dialogue": dialogue,
         "journal": g["journal"][-30:],
         "quests": quests,
     }
+
+
+def _setting_view(g):
+    s = g["meta"].get("setting")
+    if not s:
+        return {"name": "Emberfall", "premise": None}
+    return {"name": s["name"], "premise": s["premise"]}
 
 
 def _adjacent(world, a, b):

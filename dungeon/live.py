@@ -2,6 +2,7 @@
 button actions and the Scribe."""
 import asyncio
 import copy
+import hashlib
 import json
 import logging
 import uuid
@@ -13,7 +14,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from . import agents, combat, config, dialogue, state, world
+from . import agents, combat, config, dialogue, premise, state, world
 from .plugins import GamePlugin, is_quota_error
 from .state import GameError
 
@@ -34,6 +35,9 @@ class Hub:
         self.scribe_runner = Runner(app_name="scribe", agent=agents.scribe_agent,
                                     session_service=InMemorySessionService(), plugins=[self.plugin])
         self.scribe_runner.plugin_manager.set_skip_closing_plugins(True)
+        self.opening_runner = Runner(app_name="opening", agent=agents.opening_agent,
+                                     session_service=InMemorySessionService(), plugins=[self.plugin])
+        self.opening_runner.plugin_manager.set_skip_closing_plugins(True)
 
     def runner(self, model, live):
         key = (model, live)
@@ -43,6 +47,28 @@ class Hub:
             r.plugin_manager.set_skip_closing_plugins(True)
             self._runners[key] = r
         return self._runners[key]
+
+    async def opening(self, text):
+        """Ask the Creator for an opening built around the player's premise.
+        Cached on disk by premise, so the same idea doesn't cost another call."""
+        key = hashlib.sha1(text.lower().encode()).hexdigest()[:16]
+        cache = config.CACHE_DIR / "openings" / f"{key}.json"
+        if cache.exists():
+            return json.loads(cache.read_text(encoding="utf-8"))
+        s = await self.opening_runner.session_service.create_session(app_name="opening", user_id=USER)
+        spec = None
+        async for event in self.opening_runner.run_async(
+                user_id=USER, session_id=s.id,
+                new_message=types.Content(role="user", parts=[types.Part(text=json.dumps({"premise": text}))])):
+            if event.content and event.content.parts and not event.partial:
+                out = "".join(p.text or "" for p in event.content.parts if not p.thought)
+                if out.strip():
+                    spec = json.loads(out)
+        if not isinstance(spec, dict):
+            raise RuntimeError("the Creator returned no opening")
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(spec), encoding="utf-8")
+        return spec
 
     async def create(self, g):
         session = await self.session_service.create_session(app_name=config.APP_NAME, user_id=USER, state=g)
@@ -335,6 +361,13 @@ def opener(g, loaded=False):
     if loaded:
         return (f"[start] {p['name']} has loaded a saved game. They are at {loc['name']} in {g['mode']} mode, "
                 f"{p['hp']}/{p['max_hp']} HP. Welcome them back and remind them where they are.")
+    s = g["meta"].get("setting")
+    if s:
+        giver = next((g["world"]["npcs"][q["giver"]] for q in g["world"]["quests"].values()), None)
+        hook = f" Hint that {giver['name']}, the {giver['role']}, might have work for them." if giver else ""
+        return (f"[start] New game in {s['name']}, built from the player's premise: \"{s['premise']}\". "
+                f"The player is {p['name']}. They are standing in {loc['name']}: {loc['desc']} "
+                f"Set the scene in 2-3 sentences in the tone of the premise.{hook}")
     return (f"[start] New game. The player is {p['name']}, a sellsword arriving in Emberfall. "
             f"They are standing in {loc['name']}: {loc['desc']} Set the scene and hint that the tavern to the "
             f"north is where people talk.")

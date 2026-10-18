@@ -198,6 +198,7 @@
     const prevMode = game && game.mode;
     game = s;
     ui.pill.dataset.mode = s.mode;
+    if (s.setting) { $("#brand-text").textContent = s.setting.name; document.title = `${s.setting.name} · AI Dungeon`; }
     ui.pill.textContent = { exploration: "Exploring", dialogue: "Talking", combat: "Fighting", dead: "Fallen" }[s.mode];
     renderCombatLog(s);
     renderHud(s);
@@ -282,7 +283,7 @@
       loc.exits.forEach((e) => chip(`${esc(cap(e.direction))} · ${esc(e.name)}`, () => sendText(`I head ${e.direction}${e.to ? " to " + e.name : ""}.`)));
       loc.items.forEach((i) => chip(`Take ${esc(i.name)}`, () => sendAction("take", { item: i.id })));
       loc.features.slice(0, 2).forEach((f) => chip(`Inspect ${esc(f)}`, () => sendText(`I take a closer look at the ${f}.`), "muted"));
-      if (loc.id === "tavern") chip("Rest (5g)", () => sendAction("rest"), "muted");
+      if (loc.rest) chip("Rest (5g)", () => sendAction("rest"), "muted");
     } else if (s.mode === "dead") {
       chip("Load a save", openMenu); chip("New game", newGame, "muted");
     }
@@ -401,7 +402,7 @@
     const quests = [...s.quests].sort((a, b) => order[a.status] - order[b.status]).map((q) =>
       `<div class="quest ${q.status}"><span class="st">${q.status === "ready" ? "claim reward" : q.status}</span><b>${esc(q.title)}</b><p>${esc(q.desc)}</p></div>`).join("");
     const entries = [...s.journal].reverse().map((e) => `<li><small>${esc(e.kind)}</small>${esc(e.text)}</li>`).join("");
-    $("#journal").innerHTML = `<h3>Journal</h3><h4>Quests</h4>${quests || '<p class="empty">No quests yet. Someone in the tavern might have work.</p>'}
+    $("#journal").innerHTML = `<h3>Journal</h3><h4>Quests</h4>${quests || '<p class="empty">No quests yet. Someone around here might have work.</p>'}
       <h4>Notes</h4><ul class="entries">${entries || '<li class="empty">Nothing written yet.</li>'}</ul>`;
   }
 
@@ -467,6 +468,7 @@
   async function begin(res) {
     const j = await res.json();
     if (!res.ok) { toast(j.detail || "Something went wrong."); return; }
+    if (j.notice) setTimeout(() => toast(j.notice), 400);
     reset();
     sid = j.session_id;
     localStorage.setItem("sid", sid);
@@ -480,10 +482,31 @@
     begin(await fetch("/api/load", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slot }) }));
   }
   function newGame() { reset(); sid = null; localStorage.removeItem("sid"); $("#menu-sheet").hidden = true; $("#title").hidden = false; listSaves($("#title-saves"), loadSlot); }
+  const premiseBox = $("#premise");
+  const premiseChips = [...document.querySelectorAll("#premise-chips .chip")];
+  function markPremise() {
+    const v = premiseBox.value.trim();
+    premiseChips.forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.premise === v)));
+  }
+  premiseChips.forEach((c) => c.addEventListener("click", () => { premiseBox.value = c.dataset.premise; markPremise(); }));
+  premiseBox.addEventListener("input", markPremise);
+  markPremise();
   $("#start-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     ensureAudio();
-    begin(await fetch("/api/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: $("#hero-name").value }) }));
+    const btn = $("#btn-begin");
+    const premise = premiseBox.value.trim();
+    btn.disabled = true;
+    btn.textContent = premise ? "Building your world…" : "Begin";
+    try {
+      const res = await fetch("/api/new", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: $("#hero-name").value, premise }) });
+      await begin(res);
+    } catch (err) {
+      toast("Couldn't reach the server.");
+    } finally {
+      btn.disabled = false; btn.textContent = "Begin";
+    }
   });
   $("#inputbar").addEventListener("submit", (e) => { e.preventDefault(); sendText(ui.say.value); ui.say.value = ""; });
   ui.say.addEventListener("focus", () => setTimeout(() => { fitViewport(); scrollDown(); }, 250));

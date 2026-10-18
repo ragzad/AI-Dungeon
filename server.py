@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from dungeon import config, state
+from dungeon import config, premise, state
 from dungeon.live import GameSession, Hub, opener
 from dungeon.state import GameError
 
@@ -24,6 +24,7 @@ _fresh = set()  # sessions that haven't had their opening narration yet
 
 class NewGame(BaseModel):
     name: str = "Wren"
+    premise: str = ""
 
 
 class SaveRequest(BaseModel):
@@ -51,9 +52,20 @@ async def new_game(body: NewGame):
     name = " ".join(body.name.split())[:24] or "Wren"
     g = state.new_game(name)
     g["world"]["locations"]["square"]["visited"] = True
+    idea = premise.clean(body.premise)
+    notice = None
+    if idea:
+        if not config.has_key():
+            notice = "No API key, so you're starting in Emberfall instead."
+        else:
+            try:
+                premise.apply(g, idea, await hub.opening(idea))
+            except Exception as exc:
+                log.warning("opening for premise failed: %s", exc)
+                notice = "The Creator couldn't build that one just now, so you're starting in Emberfall."
     sid = await hub.create(g)
     _fresh.add((sid, False))
-    return {"session_id": sid, "state": state.public_view(g)}
+    return {"session_id": sid, "state": state.public_view(g), "notice": notice}
 
 
 @app.get("/api/state/{sid}")

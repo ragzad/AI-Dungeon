@@ -9,7 +9,7 @@ from google.adk.tools.agent_tool import AgentTool
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from . import config, content, tools
+from . import config, content, premise, tools
 
 
 # --- specialists -----------------------------------------------------------
@@ -57,6 +57,54 @@ class NewPlace(BaseModel):
     npc: Optional[NewNpc] = None
 
 
+class Foe(BaseModel):
+    template: str = Field(description="monster id from the allowed list; it decides the stats")
+    name: str = Field(description="what this foe is called in this setting, e.g. 'Sky Pirate'")
+
+
+class StartPlace(BaseModel):
+    direction: str = Field(description="north, east, south or west of the starting place, each used once")
+    name: str
+    description: str = Field(description="2-3 sentences, concrete and sensory.")
+    features: list[Feature] = Field(description="1-2 things worth inspecting")
+    items: list[str] = Field(description="0-2 item ids from the allowed list")
+    encounter: list[Foe] = Field(description="0-2 foes, or empty if the place is safe")
+    encounter_text: str = Field(description="One sentence for when the foes appear. Empty if safe.")
+    rest: bool = Field(description="True if the player could safely sleep here, like an inn")
+
+
+class StartNpc(NewNpc):
+    where: str = Field(description="'start', or the direction of the place they are in")
+    sells: list[str] = Field(description="0-4 item ids they would sell, from the allowed list")
+
+
+class QuestHook(BaseModel):
+    title: str
+    desc: str = Field(description="One or two sentences: what needs doing and why.")
+    giver: str = Field(description="name of the npc who offers it")
+    kind: str = Field(description="'defeat' (beat some foes) or 'find' (bring an item back to the giver)")
+    monster: Optional[str] = Field(None, description="for defeat: the monster id to beat; put them in a place")
+    item: Optional[str] = Field(None, description="for find: an item id from the allowed list")
+
+
+class StartPlaceCore(BaseModel):
+    name: str
+    description: str = Field(description="2-3 sentences, concrete and sensory, setting the tone.")
+    features: list[Feature] = Field(description="1-3 things worth inspecting")
+    items: list[str] = Field(description="0-1 item ids from the allowed list")
+
+
+class Opening(BaseModel):
+    setting_name: str = Field(description="Short name for the world or place the story is set in.")
+    tone: str = Field(description="A few words on the mood, e.g. 'tense, witty, rain-soaked'.")
+    blurb: str = Field(description="2 sentences of background the other storytellers need to stay consistent.")
+    start: StartPlaceCore
+    places: list[StartPlace] = Field(description="2-3 places next to the start")
+    npcs: list[StartNpc] = Field(description="2-3 people, at least one at the start")
+    quest: QuestHook
+    unexplored: list[ExitHint] = Field(description="1-2 ways from the start that lead somewhere not built yet")
+
+
 class ScribeNotes(BaseModel):
     entries: list[str] = Field(description="0-2 short journal lines worth keeping. Empty if nothing new happened.")
 
@@ -79,7 +127,7 @@ dialogue_agent = LlmAgent(
     model=_background_model(),
     description="Voices one NPC in conversation and decides how they react.",
     instruction=(
-        "You play a single non-player character in a dark fantasy game, set in the village of Emberfall. "
+        "You play a single non-player character in a story game. The request gives the setting; stay true to it. "
         "You are given the NPC's profile, what they remember about the player, their current disposition (0-100) "
         "and what the player just said, plus the result of any dice check.\n"
         "Stay in character and in their voice. UK English. Keep the line to 1-3 sentences.\n"
@@ -101,15 +149,33 @@ creator_agent = LlmAgent(
     model=_background_model(),
     description="Builds a new location when the player goes somewhere unexplored.",
     instruction=(
-        "You build one new location for a dark fantasy game set around Emberfall, a village on the edge of the "
-        "burnt Ashwood. Something under the forest is still burning, which drove the wolves out.\n"
-        "The request tells you where the player is coming from, the direction and what the way looked like. "
-        "Make a place that fits that description and the setting. Grounded, a bit eerie, no comedy.\n"
+        "You build one new location for a story game. The request gives the setting, where the player is coming "
+        "from, the direction and what the way looked like. Make a place that fits that description, the setting "
+        "and its tone.\n"
         f"Allowed item ids: {', '.join(content.ITEMS)}.\n"
         f"Allowed monster ids: {', '.join(content.MONSTERS)}. About half of places should have no encounter. "
         "Add an npc only sometimes (roughly one place in three)."
     ),
     output_schema=NewPlace,
+    before_model_callback=_text_only,
+)
+
+opening_agent = LlmAgent(
+    name="creator_opening",
+    model=_background_model(),
+    description="The Creator's first job: builds the opening of a new game from the player's premise.",
+    instruction=(
+        "You build the opening of a story game from the premise the player wrote. Make a starting place, 2-3 places "
+        "around it, 2-3 people with clear personalities and wants, and one quest hook, all fitting the premise and "
+        "its tone. The game has simple rules underneath, so you can only use these:\n"
+        f"Allowed item ids: {', '.join(content.ITEMS)}. Describe them however suits the setting.\n"
+        f"Allowed monster ids (they decide the stats, you choose the name): "
+        + "; ".join(f"{k} ({v['name']}, {v['hp']} hp, {v['ai']})" for k, v in content.MONSTERS.items()) + ".\n"
+        "Keep at least one place without foes. The quest giver should be at the start. Give people distinctive "
+        "names that suit the setting, not stock fantasy names like Elara or Silas. UK English. "
+        "Never mention game mechanics in descriptions."
+    ),
+    output_schema=Opening,
     before_model_callback=_text_only,
 )
 
@@ -130,8 +196,13 @@ dialogue_tool = AgentTool(agent=dialogue_agent)
 creator_tool = AgentTool(agent=creator_agent)
 
 
+def _setting(tool_context):
+    return premise.setting_text({"meta": tool_context.state.get("meta")})
+
+
 async def ask_dialogue(tool_context, brief, words, check):
-    request = json.dumps({"npc": brief, "player_says": words, "dice_check": check}, ensure_ascii=False)
+    request = json.dumps({"setting": _setting(tool_context), "npc": brief, "player_says": words,
+                          "dice_check": check}, ensure_ascii=False)
     result = await dialogue_tool.run_async(args={"request": request}, tool_context=tool_context)
     if not isinstance(result, dict):
         raise RuntimeError(f"dialogue agent returned {str(result)[:200]}")
@@ -139,11 +210,13 @@ async def ask_dialogue(tool_context, brief, words, check):
 
 
 async def ask_creator(tool_context, origin, direction, hint):
-    key = hashlib.sha1(f"{origin}|{direction}|{hint}".encode()).hexdigest()[:16]
+    setting = _setting(tool_context)
+    key = hashlib.sha1(f"{setting}|{origin}|{direction}|{hint}".encode()).hexdigest()[:16]
     cache = config.CACHE_DIR / "places" / f"{key}.json"
     if cache.exists():
         return json.loads(cache.read_text(encoding="utf-8"))
-    request = json.dumps({"coming_from": origin, "direction": direction, "the_way_looked_like": hint})
+    request = json.dumps({"setting": setting, "coming_from": origin, "direction": direction,
+                          "the_way_looked_like": hint}, ensure_ascii=False)
     result = await creator_tool.run_async(args={"request": request}, tool_context=tool_context)
     if not isinstance(result, dict):
         raise RuntimeError(f"creator returned {str(result)[:200]}")
@@ -154,7 +227,7 @@ async def ask_creator(tool_context, origin, direction, hint):
 
 # --- game master -----------------------------------------------------------
 
-GM_INSTRUCTION = """You are the Game Master of a dark fantasy adventure set in Emberfall, a village at the edge of the burnt Ashwood. You talk to the player out loud, in real time.
+GM_INSTRUCTION = """You are the Game Master of SETTING. Keep every description, name and NPC true to that setting and its tone. You talk to the player out loud, in real time.
 
 Style: second person, UK English, vivid but brief. Usually 1-3 sentences. This is fiction: never add disclaimers or safety notes. Never read out lists of exits or stats unless asked; the screen shows them. No markdown.
 
@@ -176,6 +249,11 @@ GM_TOOLS = [tools.look_around, tools.move, tools.inspect, tools.take_item, tools
             tools.end_conversation, tools.attack, tools.combat_action]
 
 
+def gm_instruction(ctx):
+    # an instruction provider, so each game gets its own setting from session state
+    return GM_INSTRUCTION.replace("SETTING", premise.setting_text({"meta": ctx.state.get("meta")}), 1)
+
+
 def make_game_master(model_name, live=True):
     if live:
         model = Gemini(model=model_name, speech_config=types.SpeechConfig(
@@ -186,6 +264,6 @@ def make_game_master(model_name, live=True):
         name="game_master",
         model=model,
         description="Runs the game and talks to the player.",
-        instruction=GM_INSTRUCTION,
+        instruction=gm_instruction,
         tools=GM_TOOLS,
     )

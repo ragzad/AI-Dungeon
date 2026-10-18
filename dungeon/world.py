@@ -84,7 +84,10 @@ def move(g, direction, d):
         result["left_conversation_with"] = left_dialogue
     enc = loc.get("encounter")
     if enc:
-        fight = combat.start_combat(g, [{"template": t} for t in enc["enemies"]], d, intro=enc.get("text"))
+        names = enc.get("names") or []
+        foes = [{"template": t, **({"name": names[i]} if i < len(names) and names[i] else {})}
+                for i, t in enumerate(enc["enemies"])]
+        fight = combat.start_combat(g, foes, d, intro=enc.get("text"))
         result["encounter"] = {"text": enc.get("text"), "events": fight["events"], "status": combat.summary(g)}
     return result
 
