@@ -215,7 +215,7 @@
     const pct = max ? Math.max(0, Math.min(100, (cur / max) * 100)) : 0;
     return `<div class="bar ${cls}"><i style="width:${pct}%"></i></div>`;
   }
-  function tags(list) { return list && list.length ? `<span class="status-tags">${list.map((t) => `<span class="tag ${t.name}">${t.name}</span>`).join("")}</span>` : ""; }
+  function tags(list) { return list && list.length ? `<span class="status-tags">${list.map((t) => `<span class="tag ${t.name}">${t.name}${t.amount ? " " + t.amount : ""}</span>`).join("")}</span>` : ""; }
 
   function renderHud(s) {
     if (s.mode === "combat" && s.combat) {
@@ -231,7 +231,12 @@
           <span class="bar-name">${esc(c.name)}<small>AC ${c.ac}${mine ? "" : id === target ? " · target" : ""}${tags(c.status)}</small></span>
           ${bar(c.hp, c.max_hp, mine ? "player" : "")}<span class="bar-num">${c.hp}/${c.max_hp}</span></button>`;
       });
-      ui.hud.innerHTML = `<div class="bars">${rows.join("")}</div><div class="hud-meta"><span>Round ${cb.round}</span><span>Tap an enemy to target it</span></div>`;
+      const t = target && cb.combatants[target];
+      const intel = [];
+      if (t && t.abilities) intel.push(...t.abilities.map((a) => `<span class="sig" title="${esc(a.desc)}">${esc(a.name)}</span>`));
+      if (t && t.weak && t.weak.length) intel.push(`<span class="weak">weak: ${esc(t.weak.join(", "))}</span>`);
+      if (t && t.resist && t.resist.length) intel.push(`<span class="resist">resists: ${esc(t.resist.join(", "))}</span>`);
+      ui.hud.innerHTML = `<div class="bars">${rows.join("")}</div><div class="hud-meta"><span>Round ${cb.round}</span>${intel.length ? `<span class="intel">${intel.join("")}</span>` : "<span>Tap an enemy to target it</span>"}</div>`;
       $$(".bar-row.enemy", ui.hud).forEach((b) => b.addEventListener("click", () => { target = b.dataset.id; renderHud(game); }));
       ui.hud.hidden = false;
     } else if (s.mode === "dialogue" && s.dialogue) {
@@ -294,21 +299,25 @@
     const show = s.mode === "combat" && s.combat && !s.combat.outcome;
     ui.actionbar.hidden = !show;
     if (!show) { ui.actionbar.innerHTML = ""; return; }
-    const ab = Object.fromEntries(s.player.abilities.map((a) => [a.id, a]));
-    const potions = s.player.inventory.filter((i) => i.kind === "consumable").reduce((n, i) => n + i.qty, 0);
-    const btn = (id, label, sub, cls = "", disabled = false) => `<button type="button" class="act ${cls}" data-act="${id}" ${disabled ? "disabled" : ""}>${label}<small>${sub}</small></button>`;
+    const usable = s.player.inventory.filter((i) => i.combat).reduce((n, i) => n + i.qty, 0);
+    const btn = (id, label, sub, cls = "", disabled = false, extra = "") => `<button type="button" class="act ${cls}" data-act="${id}" ${extra} ${disabled ? "disabled" : ""}>${esc(label)}<small>${esc(sub)}</small></button>`;
+    const abilities = s.player.abilities.map((a) => {
+      const sub = a.id === "power_strike" ? `${a.uses} left` : a.id === "second_wind" ? `${a.uses} left · heal` : `${a.uses} left · ${a.desc.replace(/ \(.*\)$/, "")}`;
+      const id = a.generated ? "ability" : a.id;
+      return btn(id, a.name, sub, a.generated ? "gen" : "", !a.uses, a.generated ? `data-ability="${esc(a.id)}"` : "");
+    });
     ui.actionbar.innerHTML =
-      btn("attack", "Attack", "weapon " + s.player.damage, "primary") +
-      btn("power_strike", "Power Strike", `${ab.power_strike.uses} left`, "", !ab.power_strike.uses) +
+      btn("attack", "Attack", `${s.player.damage} ${s.player.damage_type || ""}`.trim(), "primary") +
       btn("defend", "Defend", "+2 AC") +
-      btn("item", "Item", `${potions} usable`, "", !potions) +
-      btn("second_wind", "Second Wind", `${ab.second_wind.uses} left`, "", !ab.second_wind.uses) +
+      btn("item", "Item", `${usable} usable`, "", !usable) +
+      abilities.join("") +
       btn("flee", "Flee", "dex check");
+    ui.actionbar.classList.toggle("many", s.player.abilities.length > 2);
     $$(".act", ui.actionbar).forEach((b) => b.addEventListener("click", () => {
       const a = b.dataset.act;
       if (a === "item") return openItems();
       $$(".act", ui.actionbar).forEach((x) => (x.disabled = true));
-      sendAction(a, { target });
+      sendAction(a, b.dataset.ability ? { target, ability: b.dataset.ability } : { target });
       thinking("Rolling dice…");
     }));
   }
@@ -331,7 +340,8 @@
     if (cb.outcome === "victory") {
       const r = cb.rewards || { xp: 0, gold: 0, items: [] };
       d.className = "result-card";
-      d.innerHTML = `<h4>Victory</h4><p>+${r.xp} XP · +${r.gold} gold${r.items.length ? " · " + r.items.length + " item" + (r.items.length > 1 ? "s" : "") : ""}</p><button class="btn ghost" type="button">Carry on</button>`;
+      const names = r.names || [];
+      d.innerHTML = `<h4>Victory</h4><p>+${r.xp} XP · +${r.gold} gold${r.items.length ? " · " + r.items.length + " item" + (r.items.length > 1 ? "s" : "") : ""}</p>${names.length ? `<ul class="loot">${names.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}<button class="btn ghost" type="button">Carry on</button>`;
     } else if (cb.outcome === "fled") {
       d.className = "result-card"; d.innerHTML = `<h4>You got away</h4><p>Catch your breath. Your wounds are still with you.</p><button class="btn ghost" type="button">Carry on</button>`;
     } else {
@@ -344,18 +354,23 @@
   function renderSheet(s) {
     const p = s.player;
     const st = Object.entries(p.stats).map(([k, v]) => `<div><b>${v >= 0 ? "+" : ""}${v}</b><span>${k}</span></div>`).join("");
+    const equippedIds = Object.values(p.equipped_ids || {});
     const inv = p.inventory.map((i) => {
-      const equipped = Object.values(p.equipped).includes(i.name);
-      const usable = i.kind === "consumable" || ((i.kind === "weapon" || i.kind === "armour") && !equipped);
-      const verb = i.kind === "consumable" ? "Use" : "Equip";
-      return `<li><span class="nm">${esc(i.name)}${i.qty > 1 ? ` ×${i.qty}` : ""} ${equipped ? '<span class="eq">equipped</span>' : ""}<small>${esc(i.desc)}</small></span>
+      const equipped = equippedIds.includes(i.id);
+      const gear = ["weapon", "armour", "trinket"].includes(i.kind);
+      const usable = i.kind === "consumable" || i.kind === "scroll" || (gear && !equipped);
+      const verb = i.kind === "consumable" ? "Use" : i.kind === "scroll" ? "Study" : "Equip";
+      const tier = i.tier ? `<span class="tier t${i.tier}">${"◆".repeat(i.tier)}</span>` : "";
+      const line = [i.stats, i.desc].filter(Boolean).join(" · ");
+      return `<li><span class="nm">${esc(i.name)}${i.qty > 1 ? ` ×${i.qty}` : ""} ${tier} ${equipped ? '<span class="eq">equipped</span>' : ""}<small>${esc(line)}</small></span>
         ${usable ? `<button class="mini" data-use="${i.id}" type="button">${verb}</button>` : ""}</li>`;
     }).join("");
-    const abil = p.abilities.map((a) => `<div class="ability"><span>${esc(a.name)}</span><span class="pips">${Array.from({ length: a.max_uses }, (_, i) => `<i class="${i < a.uses ? "on" : ""}"></i>`).join("")}</span></div>`).join("");
+    const abil = p.abilities.map((a) => `<div class="ability"><span>${esc(a.name)}<small>${esc(a.desc)}</small></span><span class="pips">${Array.from({ length: a.max_uses }, (_, i) => `<i class="${i < a.uses ? "on" : ""}"></i>`).join("")}</span></div>`).join("");
     $("#sheet").innerHTML = `<div class="sheet-top"><h3>${esc(p.name)}</h3><span class="lvl">Level ${p.level} ${esc(p.class)}</span></div>
       <div class="labelled"><span>HP</span>${bar(p.hp, p.max_hp, "player")}<span>${p.hp}/${p.max_hp}</span></div>
       <div class="labelled"><span>XP</span>${bar(p.xp, p.xp_next, "xp")}<span>${p.xp}/${p.xp_next}</span></div>
       ${p.status.length ? `<p>${tags(p.status)}</p>` : ""}
+      ${p.resist && p.resist.length ? `<p class="resists">Resists ${esc(p.resist.join(", "))}</p>` : ""}
       <div class="kv"><div><b>${p.ac}</b><span>AC</span></div><div><b>+${p.attack}</b><span>Attack</span></div><div><b>${p.gold}</b><span>Gold</span></div></div>
       <div class="kv stats">${st}</div>
       <h4>Abilities</h4>${abil}
@@ -423,8 +438,8 @@
   ui.scrim.addEventListener("click", closeDrawer);
 
   function openItems() {
-    const list = game.player.inventory.filter((i) => i.kind === "consumable");
-    $("#item-list").innerHTML = list.map((i) => `<button class="item-opt" type="button" data-item="${i.id}"><span>${esc(i.name)} ×${i.qty}<small>${esc(i.desc)}</small></span></button>`).join("") || '<p class="empty">Nothing usable.</p>';
+    const list = game.player.inventory.filter((i) => i.combat);
+    $("#item-list").innerHTML = list.map((i) => `<button class="item-opt" type="button" data-item="${i.id}"><span>${esc(i.name)} ×${i.qty}<small>${esc(i.stats || i.desc)}</small></span></button>`).join("") || '<p class="empty">Nothing usable.</p>';
     $$(".item-opt").forEach((b) => b.addEventListener("click", () => {
       $("#item-sheet").hidden = true; sendAction("item", { item: b.dataset.item, target }); thinking("Rolling dice…");
     }));
