@@ -139,6 +139,17 @@ docker run -p 8010:8010 --env-file .env ai-dungeon
 
 The mic needs either localhost or HTTPS, because browsers only allow microphone access on secure pages.
 
+### Playing on a phone
+
+If the game is on a public URL, set `ACCESS_CODE` first. With it set, the page, the API and the WebSocket all ask for the passcode once, then a cookie remembers you for a year. The cookie holds a hash rather than the code itself, and too many wrong guesses lock things for 15 minutes. Changing the code logs everyone out.
+
+```bash
+ACCESS_CODE=three-short-words python server.py
+cloudflared tunnel --url http://localhost:8010   # free HTTPS URL, changes each run
+```
+
+On Android, open the HTTPS URL in Chrome, enter the passcode, then pick "Add to Home screen" (or "Install app") from the menu. It opens from the icon without the browser bars. There's no offline mode, as the game needs the server anyway.
+
 ## Balance
 
 `scripts/balance.py` makes random but valid worlds with the forge and plays them through the real combat engine with a simple sensible player (attack the weakest, use abilities and potions when it makes sense). It's deterministic, so the same run gives the same numbers. Across 100 generated worlds with 25 seeds each, I got:
