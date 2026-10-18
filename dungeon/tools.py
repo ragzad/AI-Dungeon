@@ -4,7 +4,7 @@ import logging
 
 from google.adk.tools.tool_context import ToolContext
 
-from . import combat, dialogue, state, world
+from . import combat, dialogue, names, state, world
 from .state import GameError
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,10 @@ def _run(tool_context, fn):
         return {"ok": False, "refused": str(exc), "mode": g["mode"]}
     state.store_dice(g, d)
     state.commit(tool_context.state, g)
-    return {"ok": True, **result, "mode": g["mode"]}
+    out = {"ok": True, **result, "mode": g["mode"]}
+    if g.get("combat"):
+        out["facts"] = combat.facts(g)
+    return out
 
 
 def look_around(tool_context: ToolContext) -> dict:
@@ -47,6 +50,8 @@ async def move(direction: str, tool_context: ToolContext) -> dict:
             log.warning("creator failed: %s", exc)
             return {"ok": False, "refused": "The way is choked with smoke for now. Try again in a moment.",
                     "mode": g["mode"]}
+        world_names = [n["name"] for n in g["world"]["npcs"].values()] + [l["name"] for l in g["world"]["locations"].values()]
+        spec = names.clean_place(spec, world_names, seed=need["direction"] + state.location(g)["name"])
 
         def build(g, d):
             world.add_location(g, need["direction"], spec)
@@ -93,6 +98,8 @@ def talk_to(npc: str, tool_context: ToolContext) -> dict:
         if g["mode"] == "dialogue":
             result["npc"] = {k: v for k, v in dialogue.brief(g, g["dialogue"]["npc_id"]).items()
                              if k in ("name", "role", "voice", "attitude", "memory_of_player")}
+            result["narrate"] = (f"One sentence, in your narrator's voice, of {result['npc']['name']} noticing the "
+                                 f"player. Don't speak as them: their words only come from say_to_npc.")
         return result
     return _run(tool_context, go)
 
@@ -119,8 +126,12 @@ async def say_to_npc(words: str, tool_context: ToolContext, approach: str = "pla
         return {"ok": False, "refused": str(exc), "mode": g["mode"]}
     state.store_dice(g, d)
     state.commit(tool_context.state, g)
-    out = {"ok": True, "npc": state.npc(g, nid)["name"], "npc_says": reply.get("line"), "effects": effects,
-           "mode": g["mode"]}
+    name = state.npc(g, nid)["name"]
+    out = {"ok": True, "npc": name, "npc_says": reply.get("line"), "effects": effects, "mode": g["mode"],
+           "speak_exactly": f"{name}: \"{reply.get('line')}\"",
+           "how": "Say npc_says word for word in their voice. Don't shorten, reword or add to it."}
+    if g.get("combat"):
+        out["facts"] = combat.facts(g)
     if check:
         out["check"] = check
     return out

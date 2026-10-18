@@ -22,7 +22,8 @@ def new_game(name="Wren", seed=None):
     return {
         "meta": {"version": VERSION, "turn": 0, "created": int(time.time()),
                  "rng": {"seed": seed if seed is not None else random.randrange(1 << 30), "count": 0},
-                 "location_id": "square", "prev_location_id": None, "log": [], "setting": None},
+                 "location_id": "square", "prev_location_id": None, "log": [], "setting": None,
+                 "origin": "new"},
         "mode": "exploration",
         "player": content.new_player(name),
         "world": content.new_world(),
@@ -282,7 +283,9 @@ def public_view(g):
     for lid, l in world["locations"].items():
         if l.get("visited") or lid == loc_id or _adjacent(world, loc_id, lid):
             known[lid] = {"name": l["name"], "x": l["x"], "y": l["y"], "visited": bool(l.get("visited")) or lid == loc_id,
-                          "links": [d for d in l["exits"].values() if isinstance(d, str)]}
+                          "links": [d for d in l["exits"].values() if isinstance(d, str)],
+                          "gate": l.get("min_level") if p["level"] < l.get("min_level", 0) else None,
+                          "boss": bool(l.get("boss") and l.get("encounter"))}
     dialogue = None
     if g["dialogue"]:
         n = npc(g, g["dialogue"]["npc_id"])
@@ -293,7 +296,7 @@ def public_view(g):
                     "sells": [{"id": i, "name": nm, "price": price(g, nid, i)} for i, nm in stock(n, g).items()],
                     "buys": bool(n["trades"].get("buys"))}
     quests = [{"id": qid, **{k: q[k] for k in ("title", "status", "desc", "progress")}}
-              for qid, q in world["quests"].items() if q["status"] != "available"]
+              for qid, q in world["quests"].items() if q["status"] not in ("available", "locked")]
     return {
         "mode": g["mode"],
         "turn": g["meta"]["turn"],

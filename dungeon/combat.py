@@ -1,6 +1,8 @@
 """Turn-based combat. Every roll happens here; the model only narrates the log."""
+import re
+
 from . import content
-from .forge import MONSTER_ARCHETYPES
+from .forge import MONSTER_ARCHETYPES, describe_ability
 from .state import (GameError, ability_info, add_item, attack_bonus, item_info, journal, location,
                     match, monster_info, player_ac, player_resist, refresh_abilities, remove_item,
                     weapon_damage, weapon_type)
@@ -633,6 +635,15 @@ def _finish(g, outcome, events, d=None):
                 loc["npcs"].remove(e["npc_id"])
         _quest_kill(g, e)
     p["gold"] += rewards["gold"]
+    # one of each piece of gear per fight, and none you already carry; consumables can stack
+    kept, carried = [], {i["id"] for i in p["inventory"]}
+    for iid in rewards["items"]:
+        info = item_info(iid, g)
+        gear = info.get("kind") in ("weapon", "armour", "trinket", "scroll")
+        if gear and info.get("generated") and (iid in kept or iid in carried):
+            continue
+        kept.append(iid)
+    rewards["items"] = kept
     for iid in rewards["items"]:
         add_item(p["inventory"], iid)
     rewards["names"] = [item_info(i, g)["name"] for i in rewards["items"]]
@@ -672,6 +683,9 @@ def gain_xp(g, amount, events=None):
         refresh_abilities(g)
         levelled = True
         journal(g, f"Reached level {p['level']}.", "level")
+        for q in g["world"]["quests"].values():
+            if q.get("ready_at") == p["level"] and q["status"] == "active" and q.get("where"):
+                journal(g, f"{q['title']}: you feel ready now. {q['where']}", "quest")
         if events is not None and g.get("combat"):
             _event(g["combat"], events, f"{p['name']} reaches level {p['level']}! Max HP is now {p['max_hp']}.", "level")
     return levelled
@@ -690,3 +704,64 @@ def summary(g):
             st = ", ".join(x for x in (st, "weak to " + "/".join(c["weak"])) if x)
         parts.append(f"{c['name']} {c['hp']}/{c['max_hp']} HP" + (f" ({st})" if st else "") + (" DOWN" if c["hp"] <= 0 else ""))
     return f"Round {cb['round']}. " + "; ".join(parts) + (f". Outcome: {cb['outcome']}." if cb["outcome"] else ". Your turn.")
+
+
+# --- what the Game Master may say about a fight ------------------------------
+
+def facts(g):
+    """The real numbers for a fight, in one line, so the narration doesn't have to guess."""
+    cb = g.get("combat")
+    if not cb:
+        return ""
+    parts = []
+    for cid in cb["order"]:
+        c = cb["combatants"][cid]
+        if c["side"] == "enemy":
+            if c["hp"] <= 0:
+                parts.append(f"{c['name']}: down")
+                continue
+            moves = "; ".join(f"{a['name']} ({a.get('desc') or describe_ability(a)})" for a in c.get("abilities", [])) or "none"
+            parts.append(f"{c['name']}: {c['hp']}/{c['max_hp']} HP, AC {_ac(c)}, hits with {c.get('damage_type', 'slashing')}, "
+                         f"moves: {moves}, resists: {'/'.join(c.get('resist') or []) or 'nothing'}, "
+                         f"weak to: {'/'.join(c.get('weak') or []) or 'nothing'}")
+        else:
+            st = ", ".join(s["name"] for s in c["status"]) or "none"
+            parts.append(f"{c['name']} (player): {c['hp']}/{c['max_hp']} HP, AC {_ac(c)}, weapon deals "
+                         f"{weapon_type(g)}, resists: {'/'.join(player_resist(g)) or 'nothing'}, status: {st}")
+    return "FACTS (only these are true): " + " | ".join(parts)
+
+
+CLAIM_TYPES = {
+    "fire": ("fire", "flame", "flames", "heat"), "frost": ("frost", "ice", "icy", "cold"),
+    "shock": ("shock", "lightning", "electric", "electricity"), "poison": ("poison", "venom"),
+    "radiant": ("radiant", "holy", "radiance"), "necrotic": ("necrotic", "death", "rot"),
+    "psychic": ("psychic", "mind"), "slashing": ("slashing", "blade", "blades"),
+    "piercing": ("piercing",), "bludgeoning": ("bludgeoning",),
+}
+_RESIST = re.compile(r"\b(resist\w*|immune|immunity|shrugs? off|shrugged off|unharmed by|impervious)\b")
+_WEAK = re.compile(r"\b(weak(?:ness)?\s+(?:to|against)|vulnerab\w*)\b")
+
+
+def check_claims(text, g):
+    """Find resistance or weakness claims in narration that the fight doesn't back up.
+    Returns short corrections, or [] if the narration is consistent."""
+    cb = g.get("combat")
+    if not cb or not text:
+        return []
+    enemies = [c for c in cb["combatants"].values() if c["side"] == "enemy"]
+    resist = {t for c in enemies for t in c.get("resist") or []} | set(player_resist(g))
+    weak = {t for c in enemies for t in c.get("weak") or []}
+    out = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text.lower()):
+        said = [t for t, words in CLAIM_TYPES.items() if any(re.search(rf"\b{w}\b", sentence) for w in words)]
+        if _RESIST.search(sentence):
+            wrong = [t for t in said if t not in resist]
+            if wrong:
+                out.append(f"Nothing in this fight resists {', '.join(wrong)}.")
+            elif not said and not resist:
+                out.append("Nothing in this fight resists anything.")
+        if _WEAK.search(sentence):
+            wrong = [t for t in said if t not in weak]
+            if wrong:
+                out.append(f"Nothing in this fight is weak to {', '.join(wrong)}.")
+    return list(dict.fromkeys(out))
