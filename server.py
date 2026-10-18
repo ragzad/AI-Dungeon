@@ -3,12 +3,12 @@ import json
 import logging
 import os
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from dungeon import config, premise, state
+from dungeon import access, config, premise, state
 from dungeon.live import GameSession, Hub, opener
 from dungeon.state import GameError
 
@@ -20,6 +20,57 @@ hub = Hub()
 STATIC = config.ROOT / "static"
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 _fresh = set()  # sessions that haven't had their opening narration yet
+
+
+@app.middleware("http")
+async def passcode_gate(request: Request, call_next):
+    if access.allowed(request.cookies) or access.is_open(request.url.path):
+        return await call_next(request)
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": "Passcode needed."}, status_code=401)
+    return HTMLResponse(access.LOGIN_PAGE, status_code=401 if request.url.path != "/" else 200,
+                        headers={"cache-control": "no-store"})
+
+
+def _client_ip(request):
+    # behind the Cloudflare tunnel every request comes from localhost, so use the address it passes on
+    return request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
+
+
+class Login(BaseModel):
+    code: str = ""
+
+
+@app.get("/login")
+async def login_page():
+    return HTMLResponse(access.LOGIN_PAGE, headers={"cache-control": "no-store"})
+
+
+@app.post("/api/login")
+async def login(body: Login, request: Request):
+    if not access.enabled():
+        return {"ok": True}
+    ip = _client_ip(request)
+    if access.locked_out(ip):
+        raise HTTPException(429, "Too many tries. Wait a bit.")
+    if not access.check(ip, body.code):
+        await asyncio.sleep(0.5)
+        raise HTTPException(401, "Wrong passcode.")
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie(access.COOKIE, access.token(), max_age=access.MAX_AGE, httponly=True, samesite="lax",
+                    secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https")
+    return resp
+
+
+@app.get("/manifest.webmanifest")
+async def manifest():
+    return FileResponse(STATIC / "manifest.webmanifest", media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    # Android wants a service worker before it offers to install; this one does nothing offline
+    return FileResponse(STATIC / "sw.js", media_type="text/javascript", headers={"cache-control": "no-cache"})
 
 
 class NewGame(BaseModel):
@@ -107,6 +158,9 @@ async def load(body: LoadRequest):
 
 @app.websocket("/ws/{sid}")
 async def ws_game(ws: WebSocket, sid: str):
+    if not access.allowed(ws.cookies):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     try:
         g = await hub.game(sid)

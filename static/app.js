@@ -10,6 +10,15 @@
     side: $("#side"), scrim: $("#scrim"), toast: $("#toast"),
   };
   let ws = null, sid = null, game = null, target = null;
+
+  // if the passcode cookie has gone, any API call says 401: reload to get the passcode page
+  const rawFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const r = await rawFetch(...args);
+    if (r.status === 401 && String(args[0]).startsWith("/api/") && args[0] !== "/api/login") location.reload();
+    return r;
+  };
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   let gmBubble = null, committed = "", partial = "", thinkingEl = null, youVoice = null;
   const seenLog = {};
   let engineMode = "connecting";
@@ -176,6 +185,7 @@
     ws.onclose = () => {
       ui.engine.dataset.engine = ""; $("b", ui.engine).textContent = "offline";
       stopMic();
+      fetch("/api/saves").catch(() => {});  // reloads to the passcode page if the cookie has gone
       setTimeout(() => { if (sid && (!ws || ws.readyState === 3)) connect(); }, 2500);
     };
   }

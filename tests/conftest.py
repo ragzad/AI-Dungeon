@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # keep the suite offline: no key means nothing can reach Gemini by accident
 os.environ.pop("GEMINI_API_KEY", None)
 os.environ.pop("GOOGLE_API_KEY", None)
+os.environ.pop("ACCESS_CODE", None)  # the passcode gate has its own tests
 
 from dungeon import state  # noqa: E402
 
