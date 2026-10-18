@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#110e0c">
+<title>Emberfall · AI Dungeon</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app" class="app">
+  <header class="topbar">
+    <button class="icon-btn only-mobile" id="btn-drawer" aria-label="Character, map and journal">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="brand"><img class="brand-mark" src="/static/favicon.svg" alt=""><span class="brand-text"> Emberfall</span></div>
+    <span class="mode-pill" id="mode-pill" data-mode="exploration">Exploring</span>
+    <div class="topbar-right">
+      <span class="engine" id="engine" title="Game Master connection"><i></i><b>connecting</b></span>
+      <button class="icon-btn" id="btn-sound" aria-label="Narration sound" aria-pressed="true">
+        <svg class="on" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+        <svg class="off" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-menu" aria-label="Save and load">
+        <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="hud" id="hud" hidden></section>
+
+  <main class="stage">
+    <div class="stream" id="stream" aria-live="polite"></div>
+  </main>
+
+  <aside class="side" id="side" aria-label="Character, map and journal">
+    <div class="side-head only-mobile">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="sheet" aria-selected="true">Character</button>
+        <button role="tab" data-tab="map" aria-selected="false">Map</button>
+        <button role="tab" data-tab="journal" aria-selected="false">Journal</button>
+      </div>
+      <button class="icon-btn" id="btn-close-drawer" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="side-body">
+      <section class="panel" data-panel="sheet" id="sheet"></section>
+      <section class="panel" data-panel="map"><h3>Map</h3><div id="map"></div><p class="loc-line" id="loc-line"></p></section>
+      <section class="panel" data-panel="journal" id="journal"></section>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <footer class="dock" id="dock">
+    <div class="chips" id="chips"></div>
+    <div class="actionbar" id="actionbar" hidden></div>
+    <form class="inputbar" id="inputbar" autocomplete="off">
+      <button type="button" class="mic" id="btn-mic" aria-label="Talk to the Game Master" aria-pressed="false">
+        <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+      </button>
+      <input id="say" type="text" enterkeyhint="send" placeholder="What do you do?" aria-label="What do you do?" maxlength="500">
+      <button type="submit" class="send" aria-label="Send">
+        <svg viewBox="0 0 24 24"><path d="M4 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </form>
+  </footer>
+</div>
+
+<div class="sheet-modal" id="item-sheet" hidden>
+  <div class="sheet-card" role="dialog" aria-label="Use an item">
+    <h3>Use an item</h3>
+    <div id="item-list"></div>
+    <button class="btn ghost wide" data-close>Cancel</button>
+  </div>
+</div>
+
+<div class="sheet-modal" id="menu-sheet" hidden>
+  <div class="sheet-card" role="dialog" aria-label="Save and load">
+    <h3>Save game</h3>
+    <form id="save-form" class="row">
+      <input id="save-name" type="text" placeholder="Save name" maxlength="40">
+      <button class="btn" type="submit">Save</button>
+    </form>
+    <h3>Load</h3>
+    <div id="save-list" class="save-list"></div>
+    <div class="row">
+      <button class="btn ghost wide" id="btn-new">New game</button>
+      <button class="btn ghost wide" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="title-screen" id="title">
+  <div class="title-card">
+    <p class="eyebrow">A realtime adventure</p>
+    <h1>Emberfall</h1>
+    <p class="lede">Ash falls on a village at the edge of a forest that burned and never quite stopped. Talk your way through it, or fight.</p>
+    <form id="start-form">
+      <label for="hero-name">Your name</label>
+      <input id="hero-name" type="text" value="Wren" maxlength="24" autocomplete="off">
+      <button class="btn big wide" type="submit">Begin</button>
+    </form>
+    <div id="title-saves" class="save-list"></div>
+    <p class="fineprint">The Game Master speaks out loud. Use the speaker button to mute, or the mic to talk back.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
