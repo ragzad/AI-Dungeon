@@ -2,7 +2,7 @@
 
 A small dark fantasy game you play by talking to a Game Master. It speaks back out loud in real time, you can type or use your mic, and underneath it there's a proper rules engine, so fights, dice and NPC relationships are actually tracked rather than made up by the model.
 
-On the start screen you can describe the adventure you want, like "a heist in a floating city" or "a haunted lighthouse", and the game builds an opening around it: where you start, who's there, what they want and a first job. Or leave it blank (or tap "Surprise me") and you start in Emberfall, a village at the edge of a forest that burned and never quite stopped. There are a few people to talk to, a couple of quests, wolves at the edge of the woods, and new places get built as you walk into them.
+On the start screen you can describe the adventure you want, like "a heist in a floating city" or "a haunted lighthouse", and the game builds an opening around it: where you start, who's there, what they want, a first job, your own starting weapon and draught, and a boss waiting a few places out. Or leave it blank (or tap "Surprise me") and you start in Emberfall, a village at the edge of a forest that burned and never quite stopped. There are a few people to talk to, a couple of quests, wolves at the edge of the woods, and new places get built as you walk into them.
 
 ![Exploring](docs/01-explore.png)
 
@@ -32,7 +32,15 @@ It's built phone first. On a phone the chat takes the whole screen, the combat b
 | --- | --- |
 | ![Phone premise](docs/m05-premise.png) | ![Phone premise opening](docs/m06-premise-opening.png) |
 
-A premise world gets its own monsters, gear and abilities. These are from a "drowned cathedral" run: Silt-Walkers that grab you and leave you weakened, and loot like a Vial of Abyssal Oil that does frost damage and slows whatever it hits.
+A premise world gets its own monsters, gear and abilities. These are from a "lighthouse island where the fog eats ships" run. You start with a Rust-Bitten Harpoon (1d8, and it sometimes leaves foes bleeding) and two Lantern-Oil Tonics. Mist-Lurking Scrimshanders stitch your legs so you're slowed, and loot includes a Fog-Glass Phial that blinds everything it bursts over.
+
+| A new game's opening and starting kit | The world's boss |
+| --- | --- |
+| ![Opening](docs/09-opening.png) | ![Boss](docs/10-boss.png) |
+
+| A new game's opening | The world's boss |
+| --- | --- |
+| ![Phone opening](docs/m09-opening.png) | ![Phone boss](docs/m10-boss.png) |
 
 | Generated monster and its signature move | Generated loot |
 | --- | --- |
@@ -68,10 +76,17 @@ flowchart TD
 ```
 
 - **Game Master** (`dungeon/agents.py`) is an `LlmAgent` with 15 function tools. It talks to you and decides which tool fits what you said, but it can't change anything itself. It narrates what the tools hand back.
+  - It's told whether this is a brand-new game or a loaded save, so a new game doesn't open with "welcome back". If it says that anyway on a new game, the text on screen is corrected.
+  - It never speaks for an NPC on its own. When you start talking to someone it just describes them noticing you, and their lines come from the Dialogue agent, which it's told to read out word for word.
+  - Every combat result carries a FACTS line with each fighter's real HP, AC, moves, resistances and weaknesses, and it's told to use only those. After each turn its narration is checked for resistances or weaknesses the fight doesn't have, and if it made one up, a short "Rules check" note appears.
 - **World keeper** is the old Archivist idea, done in code instead of a prompt (`dungeon/world.py`). Moving, inspecting, picking up, resting and skill checks are all validated against the state, so "I pick up the tavern" just fails.
 - **Dialogue agent** plays one NPC at a time. It gets that NPC's personality, goals, what they remember about you, how much they like you (0 to 100), the secrets they could share and the quests they could offer. It replies with a line plus structured choices: how their opinion changes, whether they share a secret, offer a quest or turn hostile. `dungeon/dialogue.py` then applies those within the rules. A secret only comes out if they like you enough (or you just passed a persuade roll), and "turn hostile" is ignored unless the relationship has actually gone bad. Persuade and intimidate are real d20 rolls against your stats, and a bribe costs real gold.
 - **Combat engine** (`dungeon/combat.py`) is plain Python: initiative, AC, to-hit and damage rolls, crits on a natural 20, Defend, items, Power Strike and Second Wind, Flee as a Dex check, status effects, damage types with resistances and weaknesses, enemies picking their own moves, then XP, loot and levelling. The dice are seeded and the roll count is saved, so loading a save carries on with the same sequence. The model only narrates the log.
-- **Your premise** goes to the Creator first. It writes the opening (a starting place, two or three places around it, two or three people, a quest hook and a short note on setting and tone), and `dungeon/premise.py` checks all of it before it goes into the game: unknown items and monsters are dropped, the quest's target is made sure to exist, and there's always somewhere to rest. The premise and setting live in the session state, so saves keep them, and the Game Master, Dialogue agent and Creator all get told about it every time, in Live mode and in the text fallback. If the Creator can't build it (quota, or no key), you start in Emberfall and get told why.
+- **Your premise** goes to the Creator first. It writes the opening (a starting place, two or three places around it, two or three people, a quest hook, 4 to 6 monsters including a boss and its lair, the world's gear, your starting weapon and draught, and a short note on setting and tone), and `dungeon/premise.py` checks all of it before it goes into the game: unknown items and monsters are dropped, the quest's target is made sure to exist, and there's always somewhere to rest.
+  - If it comes back with too few monsters, no boss, or names that need changing, one cheap second call asks for just the missing monsters and new names. If that fails too, the game fills the gaps itself.
+  - Names are checked against a list of stock fantasy names the model loves (Elara, Silas, Oakhaven, Vane, Thorne, Lyra and friends), against each other, and against people in the last few worlds you made. Anything caught gets renamed, and the new name is carried through to every description and quest that mentions it.
+  - The boss lives two places beyond one of the opening places: a guarded approach, then its lair. Both are closed until you're level 2, and the map marks them. A piece of better gear lies on the way. Finishing the first job unlocks a quest to deal with the boss, and the journal and the locals tell you where to go. The first job's XP plus the opening fights get a normal player to level 2.
+  - Your starting weapon is tier 1 but comes with a small perk, like a hook that leaves foes bleeding, so it holds up against Emberfall's sword. Your starting draught heals as much as Emberfall's potion. The premise and setting live in the session state, so saves keep them, and the Game Master, Dialogue agent and Creator all get told about it every time, in Live mode and in the text fallback. If the Creator can't build it (quota, or no key), you start in Emberfall and get told why.
 - **Creator** builds a new location when you walk through an unexplored exit. It can reuse the world's monsters and items or add new ones. Results are cached on disk, so the same lane builds the same place without another API call.
 - **The forge** (`dungeon/forge.py`) is how premise worlds get new content without the model being able to break the game. The Creator picks a name, a description, an archetype and a tier (1 to 3), and never writes a number. Python does the numbers.
   - Monsters are a brute, skirmisher, caster, swarm, beast, tank or boss, and each one plays differently. Brutes hit hard, skirmishers are hard to hit, casters lean on abilities, swarms come in numbers, tanks soak damage, and bosses fight alone with more HP and two uses of their moves. HP, AC, attack and XP come from a table for that archetype and tier.
@@ -131,11 +146,15 @@ The mic needs either localhost or HTTPS, because browsers only allow microphone 
 | Fight | Win rate |
 | --- | --- |
 | Emberfall wolves, level 1 | 93.5% |
-| Generated opening fights, level 1 | 94.9% |
-| Same, with a quest reward ability | 94.6% |
-| Tier 2 areas, level 2 | 89.0% |
-| Tier 3 areas, level 3 | 89.6% |
-| Bosses | 89.2% |
+| Generated opening fights, level 1 | 94.3% |
+| Same, with a quest reward ability | 94.3% |
+| Tier 2 areas, level 2 | 88.2% |
+| Tier 3 areas, level 3 | 93.6% |
+| Bosses at level 3 | 94.2% |
+| The lair's guarded approach, level 2 | 94.2% |
+| The lair's boss, level 2 with the gear from the approach | 81.4% |
+
+The lair rows play the actual boss route each generated world builds. The boss at level 2 is the hardest fight in the game on purpose.
 
 ```
 python scripts/balance.py 100 25    # worlds, seeds
@@ -148,20 +167,20 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-There are 111 tests. They cover the dice, combat rules (initiative, hits, crits, Defend, status effects, abilities, items, fleeing, victory, defeat, loot and levelling), moving between the three modes, building a world from a premise (and falling back when that fails), the forge (budgets, clamping, repair, abilities, loot tables, the enemy AI), a short balance run, NPC disposition, secrets, quests, trading and hostility, the ADK tools with the Dialogue and Creator agents faked, saving and loading, the HTTP endpoints and the quota fallbacks. Gemini is never called, and the key is removed from the environment during the run so nothing can reach it by accident. Coverage of the engine modules is around 90%.
+There are 144 tests. They cover the dice, combat rules (initiative, hits, crits, Defend, status effects, abilities, items, fleeing, victory, defeat, loot and levelling), moving between the three modes, building a world from a premise (and falling back when that fails), the forge (budgets, clamping, repair, abilities, loot tables, the enemy AI), a short balance run, the boss lair and its gate, the starting kit, topping up short openings and renaming stock names, what the Game Master is told (new or loaded game, NPC lines, combat facts) and the guards on what it says, NPC disposition, secrets, quests, trading and hostility, the ADK tools with the Dialogue and Creator agents faked, saving and loading, the HTTP endpoints and the quota fallbacks. Gemini is never called, and the key is removed from the environment during the run so nothing can reach it by accident. Coverage of the engine modules is around 90%.
 
 ## Known limitations
 
 - The free tier is tight. Each thing you say is one Live turn, talking to an NPC adds one lite model call, and walking somewhere new adds one more. If the Live model runs out of quota, the game tells you and carries on in text with a normal model. If that runs out too, it tells you to wait a minute, and the combat buttons still work because they don't need the model.
 - Audio is always generated, even with the speaker muted, because Live models don't do text-only output any more. That uses more quota than text would.
 - Voice works in Chrome, Edge, Firefox and Safari on desktop and Android. On iPhone it needs iOS 14.5 or newer, and the phone has to be unmuted for the narration to play. Echo cancellation is left to the browser, so on a laptop without headphones the Game Master can sometimes hear itself.
-- The Game Master occasionally paraphrases an NPC instead of reading their line exactly, and now and then greets you as the NPC itself before the Dialogue agent is involved.
+- The Game Master is told to read NPC lines word for word, and in my tests it did, but it's a model and nothing can force it. Because it speaks the line as audio, it sometimes reads the "Maren Holt:" label out too.
 - Sessions live in memory, so restarting the server ends any game that hasn't been saved. Saves are JSON files in `saves/`, and there's no login, so anyone who can reach the server can see the list.
 - There's one character class and the world is small: four hand-made places plus whatever the Creator builds.
 - Openings are cached by premise to save quota, so typing exactly the same premise again gives you the same world. Change a word to get a new one.
 - Generated content is still built from a fixed set of archetypes and blocks, so a premise world plays differently but won't invent a brand new mechanic.
 - The balance numbers come from the simulator, not from lots of real people playing. A reckless player will lose more often.
-- The Creator sometimes returns fewer monsters or items than asked for, and the names it picks can still be a bit generic.
-- The Game Master sometimes makes up details in its narration, like a resistance a monster doesn't actually have. The numbers in the log and the HUD are the real ones.
-- The weapon you start with in a premise world is tier 1 on purpose, so it can feel weaker than the Emberfall sword for the first fight or two.
-- Bosses only turn up a few places out from the start once you've levelled, so a short session might not meet one.
+- Names are much better but not perfect. Only people's names are remembered between worlds, so two similar premises can still get the same item name (two of my lighthouse worlds both started with a Rust-Bitten Harpoon). Made-up replacement names, used when the model's rename fails, can sound a bit odd.
+- The guards on the Game Master only fix the text. By the time a bad line is caught, the voice has already said it, so a made-up resistance gets a "Rules check" note rather than going unsaid. The check only looks for resistance and weakness claims, not every number.
+- The boss route waits for level 2, but if you wander the opening for long enough you'll get there before finishing the first job. That's fine, but then the journal points the way only once the job is done.
+- The Creator sometimes gives a move a name that doesn't quite match what it does once the forge has made it fair. One boss's "Summon Grave-Iron" ended up binding you in chains instead of summoning anything, which matched its description but not its name.
