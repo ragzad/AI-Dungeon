@@ -138,7 +138,7 @@ The mic needs either localhost or HTTPS, because browsers only allow microphone 
 | Bosses | 89.2% |
 
 ```
-python scripts/balance.py 100 25    
+python scripts/balance.py 100 25    # worlds, seeds
 ```
 
 ## Tests
