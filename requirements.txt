@@ -1,7 +1,5 @@
-streamlit
-google-generativeai
-python-dotenv
-graphviz
-edge-tts
-gTTS
-requests
+streamlit==1.66.0
+google-generativeai==0.8.6
+python-dotenv==1.2.4
+graphviz==0.21
+gTTS==2.5.4

@@ -1,5 +1,5 @@
 # Use the official lightweight Python image
-FROM python:3.9-slim
+FROM python:3.12-slim
 
 # 1. Install System Dependencies (Graphviz is needed for the map!)
 RUN apt-get update && apt-get install -y \
