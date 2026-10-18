@@ -28,7 +28,7 @@ def test_items_get_numbers_from_the_budget_not_the_model():
 
 def test_monsters_follow_archetype_and_fair_play_rules():
     _, m = forge.make_monster(GALE, 1)
-    assert (m["hp"], m["ac"], m["attack"], m["damage"]) == (10, 13, 3, "1d6+1")
+    assert (m["hp"], m["ac"], m["attack"], m["damage"]) == (12, 13, 3, "1d6+1")
     assert m["resist"] == ["shock"] and m["weak"] == ["fire"]
     shriek = m["abilities"][0]
     assert shriek["name"] == "Gale Shriek" and [b["kind"] for b in shriek["blocks"]] == ["damage", "status"]

@@ -45,6 +45,8 @@ def brief(g, nid):
         "sells": [{"id": i, "name": name, "price": price(g, nid, i)} for i, name in stock(n, g).items()],
         "player": {"name": g["player"]["name"], "level": g["player"]["level"], "gold": g["player"]["gold"]},
         "location": location(g)["name"],
+        "rumours_you_know": [q["rumour"] + (" " + q["where"] if q["giver"] == nid else "")
+                             for q in g["world"]["quests"].values() if q.get("rumour") and q["status"] != "done"],
     }
 
 
@@ -228,5 +230,22 @@ def turn_in(g, nid):
             entry["item"] = item_info(r["item"], g)["name"]
         if r.get("ability"):
             entry["learned"] = learn(g, r["ability"])
+        unlocked = unlock_after(g, qid)
+        if unlocked:
+            entry["new_quests"] = unlocked
         done.append(entry)
     return done
+
+
+def unlock_after(g, qid):
+    """Quests that wait for another one, like the boss hunt after the opening job."""
+    out = []
+    for q in g["world"]["quests"].values():
+        if q.get("unlocks_after") != qid or q["status"] != "locked":
+            continue
+        q["status"] = "active"
+        if q["goal"]["type"] == "defeat" and q["progress"] >= q["goal"].get("count", 1):
+            q["status"] = "ready"
+        journal(g, f"New quest: {q['title']}. {q['desc']}", "quest")
+        out.append(q["title"])
+    return out

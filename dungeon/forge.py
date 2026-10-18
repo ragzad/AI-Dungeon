@@ -16,6 +16,10 @@ HEALS = ["1d4+2", "2d4+2", "2d4+4", "3d4+4", "3d4+6", "4d4+6"]
 BAD = tuple(k for k, v in content.STATUS.items() if v.get("bad"))
 GOOD = ("regen", "hasted", "defending")
 ON_HIT = ("poisoned", "burning", "bleeding", "weakened", "blinded", "slowed")
+# the rider a starting weapon gets for free if the Creator didn't pick one
+STARTER_RIDER = {"slashing": "bleeding", "piercing": "bleeding", "bludgeoning": "weakened", "fire": "burning",
+                 "frost": "slowed", "shock": "weakened", "poison": "poisoned", "radiant": "blinded",
+                 "necrotic": "weakened", "psychic": "blinded"}
 
 ITEM_ARCHETYPES = {
     "light_weapon": {"kind": "weapon", "slot": "weapon", "die": 1, "hit": 1, "type": "slashing", "stat": "dex", "price": 8},
@@ -33,7 +37,7 @@ ITEM_ARCHETYPES = {
 }
 
 # hp/ac/attack scale with tier; archetypes bend them
-MONSTER_BASE = {1: {"hp": 12, "ac": 12, "attack": 3, "bonus": 1, "xp": 30},
+MONSTER_BASE = {1: {"hp": 14, "ac": 12, "attack": 3, "bonus": 1, "xp": 30},
                 2: {"hp": 17, "ac": 12, "attack": 4, "bonus": 2, "xp": 60},
                 3: {"hp": 20, "ac": 13, "attack": 4, "bonus": 2, "xp": 100}}
 MONSTER_ARCHETYPES = {
@@ -200,8 +204,11 @@ def describe_ability(a):
 
 # --- items -------------------------------------------------------------------
 
-def make_item(spec, tier, taken=(), ability_taken=()):
-    """Returns (item_id, item, taught_ability_or_None)."""
+def make_item(spec, tier, taken=(), ability_taken=(), starter=False):
+    """Returns (item_id, item, taught_ability_or_None).
+
+    starter is the player's first weapon in a premise world: always tier 1, but its
+    rider and damage type come free, so it holds up against Emberfall's 1d8 sword."""
     arch = spec.get("archetype") if spec.get("archetype") in ITEM_ARCHETYPES else None
     if not arch:
         return None, None, None
@@ -209,19 +216,26 @@ def make_item(spec, tier, taken=(), ability_taken=()):
     name = _s(spec.get("name"), 40)
     if not name:
         return None, None, None
-    t = tier_of(spec.get("tier"), tier)
+    t = 1 if starter else tier_of(spec.get("tier"), tier)
     item = {"name": name, "desc": _s(spec.get("description"), 200), "kind": a["kind"], "archetype": arch,
             "tier": t, "price": a["price"] * (1, 3, 7)[t - 1], "generated": True}
     taught = None
     if a["kind"] == "weapon":
         die = a["die"] + t - 1
+        dtype = _dtype(spec.get("damage_type"), a["type"])
         status = str(spec.get("on_hit_status") or "").lower()
+        if starter and status not in ON_HIT:
+            status = STARTER_RIDER.get(dtype, "bleeding")
         if status in ON_HIT:
-            die -= 1  # the rider costs a die size
+            if not starter:
+                die -= 1  # the rider costs a die size
             item["on_hit"] = {"status": status, "chance": (25, 30, 35)[t - 1]}
-        item.update(slot="weapon", damage=_step(WEAPON_DICE, die), hit=a["hit"], stat=a["stat"],
-                    damage_type=_dtype(spec.get("damage_type"), a["type"]))
-        if arch != "focus" and item["damage_type"] not in content.PHYSICAL:
+        item.update(slot="weapon", damage=_step(WEAPON_DICE, die), hit=a["hit"], stat=a["stat"], damage_type=dtype)
+        if starter:
+            # level with Emberfall's 1d8 sword (a d6 if it's also accurate); the rider is the perk
+            item["damage"] = _step(WEAPON_DICE, min(die, 1 if a["hit"] else 2))
+            item["starter"] = True
+        elif arch != "focus" and item["damage_type"] not in content.PHYSICAL:
             # elemental steel is allowed, but it costs a die size like a rider does
             item["damage"] = _step(WEAPON_DICE, die - 1)
     elif a["kind"] == "armour":

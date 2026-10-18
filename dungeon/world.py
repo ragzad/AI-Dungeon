@@ -67,6 +67,10 @@ def move(g, direction, d):
     dest = location(g)["exits"][exit_dir]
     if not isinstance(dest, str):
         return {"needs_creation": {"direction": exit_dir, "hint": dest.get("hint", "")}}
+    gate = g["world"]["locations"][dest].get("min_level", 0)
+    if g["player"]["level"] < gate and not g["world"]["locations"][dest].get("visited"):
+        text = g["world"]["locations"][dest].get("gate_text") or "Something tells you not to go that way yet."
+        raise GameError(f"{text} (Come back at level {gate}.)")
     if left_dialogue:
         end_dialogue(g)
     g["meta"]["prev_location_id"] = g["meta"]["location_id"]

@@ -64,7 +64,13 @@ def rand_spec(seed):
     starter = {"name": "Starter", "description": "x", "archetype": r.choice(["light_weapon", "heavy_weapon", "ranged", "focus"]),
                "tier": 1, "damage_type": r.choice(TYPES), "on_hit_status": r.choice(list(forge.ON_HIT) + [None])}
     items = [rand_item(r, i) for i in range(6)] + [{"name": "Red Draught", "description": "x", "archetype": "potion", "tier": 1}]
-    return {"setting_name": "Sim", "tone": "x", "blurb": "x", "starting_weapon": starter, "items": items,
+    # the lair needs a tier 2 piece on the way; the Creator is asked for one, so most worlds have it
+    if r.random() < 0.8:
+        items.append({"name": "Better Kit", "description": "x", "archetype": r.choice(["light_armour", "heavy_armour", "shield"]),
+                      "tier": 2, "resist": r.choice(TYPES)})
+    drink = {"name": "Starter Draught", "description": "x", "archetype": "potion", "tier": 1}
+    return {"setting_name": "Sim", "tone": "x", "blurb": "x", "starting_weapon": starter, "starting_consumable": drink,
+            "items": items,
             "monsters": mons, "start": {"name": "Start", "description": "x", "features": [], "items": []},
             "places": places, "npcs": [{"name": "Giver", "role": "x", "personality": "x", "voice": "x", "goals": [],
                                         "secret": "", "disposition": 50, "fights_as": "brute", "where": "start", "sells": []}],
@@ -141,12 +147,33 @@ def level_up(g, level, gear_tier=0):
     g["player"]["hp"] = g["player"]["max_hp"]
 
 
+def lair_path(g):
+    """What a player walking the boss route has: level 2, the hook's reward, and the gear lying on the way."""
+    g = copy.deepcopy(g)
+    level_up(g, 2)
+    for q in g["world"]["quests"].values():
+        if q["reward"].get("ability"):
+            state.learn(g, q["reward"]["ability"])
+    locs = g["world"]["locations"]
+    approach = next((l for l in locs.values() if l.get("min_level") and not l.get("boss")), None)
+    lair = next((l for l in locs.values() if l.get("boss")), None)
+    for i in (approach or {}).get("items", []):
+        it = state.item_info(i["id"], g)
+        state.add_item(g["player"]["inventory"], i["id"])
+        if it.get("slot"):
+            g["player"]["equipped"][it["slot"]] = i["id"]
+    return g, approach, lair
+
+
 def run(worlds=40, seeds=25):
-    rows = {"t1 opening @L1": [], "t1 opening @L1 +reward": [], "t2 pair @L2": [], "t3 pair @L3": [], "boss @L3": []}
+    rows = {"t1 opening @L1": [], "t1 opening @L1 +reward": [], "t2 pair @L2": [], "t3 pair @L3": [], "boss @L3": [],
+            "lair approach @L2": [], "lair boss @L2": []}
     for w in range(worlds):
         g = premise.apply(state.new_game("Sim", seed=w), "sim", rand_spec(w))
+        gl, approach, lair = lair_path(g)
         world = g["world"]
-        encs = [l["encounter"]["enemies"] for l in world["locations"].values() if l.get("encounter")]
+        encs = [l["encounter"]["enemies"] for l in world["locations"].values()
+                if l.get("encounter") and not l.get("min_level")]
         mons = world["monsters"]
         t2 = [k for k, m in mons.items() if m["tier"] == 2 and m["archetype"] != "boss" and not m.get("npc")]
         t3 = [k for k, m in mons.items() if m["tier"] == 3 and m["archetype"] != "boss"]
@@ -168,6 +195,10 @@ def run(worlds=40, seeds=25):
                 pair = forge.fit_encounter([(k, mons[k])] * 2 + [(x, mons[x]) for x in lower[:1]] * 2,
                                            forge.ENCOUNTER_BUDGET[3], 3)
                 rows["t3 pair @L3"].append(fight(g3, pair, s, True)[0] == "victory")
+            if approach and approach.get("encounter"):
+                rows["lair approach @L2"].append(fight(gl, approach["encounter"]["enemies"], s)[0] == "victory")
+            if lair:
+                rows["lair boss @L2"].append(fight(gl, lair["encounter"]["enemies"], s)[0] == "victory")
             for k in boss:
                 lvl = 3 if mons[k]["tier"] == 2 else 4
                 gb = g3 if lvl == 3 else gb4

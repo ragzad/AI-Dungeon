@@ -60,7 +60,7 @@ def test_build_world_validates_the_opening():
     assert locs[start["exits"]["north"]]["rest"]
     vex, tamsin = w["npcs"]["npc_vex_marlowe"], w["npcs"]["npc_old_tamsin"]
     assert vex["location_id"] == "start" and vex["trades"]["sells"] == ["healing_potion"]
-    assert vex["disposition"] >= 45 and vex["quests"] == ["hook"]
+    assert vex["disposition"] >= 45 and vex["quests"] == ["hook", "boss"]
     assert tamsin["combat"]["template"] == "bandit" and tamsin["location_id"] == start["exits"]["north"]
     assert w["quests"]["hook"]["goal"] == {"type": "defeat", "template": "bandit", "count": 1}
     assert setting["name"] == "Skyreach"
