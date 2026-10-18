@@ -68,11 +68,49 @@ def norm(text):
     return re.sub(r"[^a-z0-9 ]", "", str(text).lower()).strip()
 
 
-def item_info(item_id):
+def item_info(item_id, g=None):
+    if g is not None:
+        info = ((g.get("world") or {}).get("items") or {}).get(item_id)
+        if info:
+            return info
     info = content.ITEMS.get(item_id)
     if info:
         return info
-    return {"name": item_id.replace("_", " ").title(), "kind": "misc", "price": 1, "desc": ""}
+    name = re.sub(r"^i_", "", str(item_id)).replace("_", " ").title()
+    return {"name": name, "kind": "misc", "price": 1, "desc": ""}
+
+
+def monster_info(template, g=None):
+    if g is not None:
+        m = ((g.get("world") or {}).get("monsters") or {}).get(template)
+        if m:
+            return m
+    return content.MONSTERS.get(template)
+
+
+def ability_info(ability_id, g=None):
+    if ability_id in content.ABILITIES:
+        return content.ABILITIES[ability_id]
+    if g is not None:
+        return ((g.get("world") or {}).get("abilities") or {}).get(ability_id)
+    return None
+
+
+def learn(g, ability_id):
+    """Give the player a generated ability. Returns its name, or None if already known."""
+    info = ability_info(ability_id, g)
+    if not info or ability_id in g["player"]["abilities"]:
+        return None
+    g["player"]["abilities"][ability_id] = info["max_uses"]
+    journal(g, f"Learned {info['name']}.", "level")
+    return info["name"]
+
+
+def refresh_abilities(g):
+    p = g["player"]
+    p["abilities"] = {k: (ability_info(k, g) or {"max_uses": v})["max_uses"] for k, v in p["abilities"].items()}
+    for k, v in content.ABILITIES.items():
+        p["abilities"].setdefault(k, v["max_uses"])
 
 
 def match(query, options):
@@ -132,7 +170,7 @@ def remove_item(items, item_id, qty=1):
 
 
 def inventory_options(g):
-    return {i["id"]: item_info(i["id"])["name"] for i in g["player"]["inventory"]}
+    return {i["id"]: item_info(i["id"], g)["name"] for i in g["player"]["inventory"]}
 
 
 def journal(g, text, kind="note"):
@@ -152,26 +190,61 @@ def stat_mod(g, stat):
     return g["player"]["stats"].get(stat, 0)
 
 
+def _gear(g):
+    p = g["player"]
+    return [item_info(v, g) for k, v in p["equipped"].items() if v and k != "weapon"]
+
+
+def _weapon_mod(p, stat):
+    st = p["stats"]
+    if stat == "dex":  # finesse: whichever is better
+        return max(st.get("str", 0), st.get("dex", 0))
+    if stat == "wis":  # a focus answers to force of will as much as learning
+        return max(st.get("str", 0), st.get("int", 0), st.get("wis", 0), st.get("cha", 0))
+    return st.get(stat, 0)
+
+
 def player_ac(g):
     p = g["player"]
     ac = p["base_ac"] + p["stats"]["dex"]
-    armour = p["equipped"].get("armour")
-    if armour:
-        ac += item_info(armour).get("ac", 0)
+    for info in _gear(g):
+        ac += info.get("ac", 0) + info.get("bonus", {}).get("ac", 0)
     return ac
 
 
 def attack_bonus(g):
     p = g["player"]
-    return p["proficiency"] + p["stats"]["str"]
+    weapon = item_info(p["equipped"]["weapon"], g) if p["equipped"].get("weapon") else {}
+    stat = weapon.get("stat", "str")
+    mod = _weapon_mod(p, stat)
+    return p["proficiency"] + mod + weapon.get("hit", 0) + sum(i.get("bonus", {}).get("hit", 0) for i in _gear(g))
 
 
 def weapon_damage(g):
     p = g["player"]
-    weapon = p["equipped"].get("weapon")
-    dmg = item_info(weapon).get("damage", "1d4") if weapon else "1d4"
-    mod = p["stats"]["str"]
+    weapon = item_info(p["equipped"]["weapon"], g) if p["equipped"].get("weapon") else {}
+    dmg = weapon.get("damage", "1d4")
+    stat = weapon.get("stat", "str")
+    mod = _weapon_mod(p, stat)
     return f"{dmg}+{mod}" if mod >= 0 else f"{dmg}{mod}"
+
+
+def weapon_type(g):
+    w = g["player"]["equipped"].get("weapon")
+    return item_info(w, g).get("damage_type", "slashing") if w else "bludgeoning"
+
+
+def player_resist(g):
+    out = []
+    for info in _gear(g):
+        out += info.get("resist", [])
+        if info.get("bonus", {}).get("resist"):
+            out.append(info["bonus"]["resist"])
+    return sorted(set(out))
+
+
+def bonus_hp(g):
+    return sum(i.get("bonus", {}).get("max_hp", 0) for i in _gear(g))
 
 
 # --- what the UI sees --------------------------------------------------------
@@ -193,12 +266,17 @@ def public_view(g):
         "ac": player_ac(g),
         "attack": attack_bonus(g),
         "damage": weapon_damage(g),
-        "equipped": {k: (item_info(v)["name"] if v else None) for k, v in p["equipped"].items()},
-        "inventory": [{"id": i["id"], "qty": i["qty"], **{k: item_info(i["id"]).get(k) for k in ("name", "kind", "desc")}}
+        "equipped": {k: (item_info(v, g)["name"] if v else None) for k, v in p["equipped"].items()},
+        "equipped_ids": {k: v for k, v in p["equipped"].items() if v},
+        "resist": player_resist(g),
+        "damage_type": weapon_type(g),
+        "inventory": [{"id": i["id"], "qty": i["qty"], **{k: item_info(i["id"], g).get(k) for k in ("name", "kind", "desc", "slot", "tier")},
+                       "stats": _item_stats(item_info(i["id"], g)),
+                       "combat": _combat_usable(item_info(i["id"], g))}
                       for i in p["inventory"]],
-        "abilities": [{"id": k, "name": content.ABILITIES[k]["name"], "uses": v,
-                       "max_uses": content.ABILITIES[k]["max_uses"], "desc": content.ABILITIES[k]["desc"]}
-                      for k, v in p["abilities"].items()],
+        "abilities": [{"id": k, "name": a["name"], "uses": v, "max_uses": a["max_uses"], "desc": a["desc"],
+                       "generated": k not in content.ABILITIES, "target": a.get("target", "enemy")}
+                      for k, v in p["abilities"].items() for a in [ability_info(k, g)] if a],
     }
     known = {}
     for lid, l in world["locations"].items():
@@ -212,7 +290,7 @@ def public_view(g):
         nid = g["dialogue"]["npc_id"]
         dialogue = {**g["dialogue"], "name": n["name"], "role": n["role"], "disposition": n["disposition"],
                     "attitude": attitude(n["disposition"]), "memories": len(n["memory"]),
-                    "sells": [{"id": i, "name": nm, "price": price(g, nid, i)} for i, nm in stock(n).items()],
+                    "sells": [{"id": i, "name": nm, "price": price(g, nid, i)} for i, nm in stock(n, g).items()],
                     "buys": bool(n["trades"].get("buys"))}
     quests = [{"id": qid, **{k: q[k] for k in ("title", "status", "desc", "progress")}}
               for qid, q in world["quests"].items() if q["status"] != "available"]
@@ -222,7 +300,7 @@ def public_view(g):
         "setting": _setting_view(g),
         "player": player,
         "location": {"id": loc_id, "name": loc["name"], "desc": loc["desc"], "exits": exits,
-                     "items": [{"id": i["id"], "name": item_info(i["id"])["name"], "qty": i["qty"]} for i in loc["items"]],
+                     "items": [{"id": i["id"], "name": item_info(i["id"], g)["name"], "qty": i["qty"]} for i in loc["items"]],
                      "npcs": [{"id": nid, "name": npc(g, nid)["name"], "role": npc(g, nid)["role"],
                                "attitude": "hostile" if npc(g, nid)["hostile"] else attitude(npc(g, nid)["disposition"])}
                               for nid in loc["npcs"] if npc(g, nid)["alive"]],
@@ -233,6 +311,20 @@ def public_view(g):
         "journal": g["journal"][-30:],
         "quests": quests,
     }
+
+
+def _item_stats(info):
+    if info.get("stats"):
+        return info["stats"]
+    if info.get("kind") == "weapon":
+        return f"{info.get('damage', '1d4')} slashing"
+    if info.get("kind") == "armour" and info.get("ac"):
+        return f"+{info['ac']} AC"
+    return ""
+
+
+def _combat_usable(info):
+    return info.get("kind") == "consumable" and bool(info.get("effect") or info.get("use"))
 
 
 def _setting_view(g):

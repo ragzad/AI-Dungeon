@@ -52,12 +52,24 @@ MONSTERS = {
 }
 
 STATUS = {
-    "poisoned": {"turns": 3, "damage": "1d4", "desc": "takes 1d4 poison damage each turn"},
-    "burning": {"turns": 2, "damage": "1d6", "desc": "takes 1d6 fire damage each turn"},
-    "bleeding": {"turns": 2, "damage": "1d3", "desc": "takes 1d3 damage each turn"},
-    "stunned": {"turns": 1, "desc": "loses their next turn"},
+    "poisoned": {"turns": 3, "damage": "1d4", "bad": True, "desc": "takes 1d4 poison damage each turn"},
+    "burning": {"turns": 2, "damage": "1d6", "bad": True, "desc": "takes 1d6 fire damage each turn"},
+    "bleeding": {"turns": 2, "damage": "1d3", "bad": True, "desc": "takes 1d3 damage each turn"},
+    "stunned": {"turns": 1, "bad": True, "desc": "loses their next turn"},
     "defending": {"turns": 1, "ac": 2, "desc": "+2 AC until their next turn"},
+    "weakened": {"turns": 2, "bad": True, "desc": "deals 2 less damage"},
+    "blinded": {"turns": 2, "bad": True, "desc": "-3 to hit"},
+    "slowed": {"turns": 2, "bad": True, "desc": "-2 AC and can't flee"},
+    "regen": {"turns": 3, "heal": "1d4", "desc": "heals 1d4 each turn"},
+    "shielded": {"turns": 3, "desc": "a ward soaks up damage"},
+    "hasted": {"turns": 2, "desc": "+2 to hit and +1 AC"},
 }
+
+# what kind of damage something does; monsters can resist or be weak to these
+PHYSICAL = ("slashing", "piercing", "bludgeoning")
+DAMAGE_TYPES = PHYSICAL + ("fire", "frost", "shock", "poison", "radiant", "necrotic", "psychic")
+# damage-over-time statuses count as this type for resistances
+DOT_TYPE = {"poisoned": "poison", "burning": "fire", "bleeding": "slashing"}
 
 ABILITIES = {
     "power_strike": {"name": "Power Strike", "max_uses": 2,
