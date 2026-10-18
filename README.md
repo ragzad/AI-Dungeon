@@ -15,7 +15,7 @@ The first version was a Streamlit app where five agents passed a JSON file aroun
 - Type what you do, tap one of the suggestion chips, or press the mic and say it.
 - **Exploring**: move around, look at things, pick things up. Exits, people and items show up as chips above the input. The map, character sheet and journal are in the side panel (the menu button on a phone).
 - **Talking**: tap "Talk to Maren" (or just say you go and talk to her) and the screen switches to a conversation with her portrait, how much she likes you, and three suggested replies. What you say changes her opinion of you. Be nice and she might tell you things or give you work. Push someone too far and they'll go for you, which starts a fight.
-- **Fighting**: HP bars at the top, big action buttons at the bottom: Attack, Power Strike, Defend, Item, Second Wind and Flee. Tap an enemy's bar to target it. Every roll shows in the log with the numbers, and the Game Master narrates what happened. Win and you get XP and loot. Lose and you can load a save.
+- **Fighting**: HP bars at the top, big action buttons at the bottom: Attack, Defend, Item, Power Strike, Second Wind, any abilities you've picked up, and Flee. Tap an enemy's bar to target it. Every roll shows in the log with the numbers, and the Game Master narrates what happened. Win and you get XP and loot. Lose and you can load a save.
 - Saving is the disk button at the top. The Gutter Lantern rents beds for 5 gold if you need to heal up.
 
 | Talking | Fighting | After the fight |
@@ -31,6 +31,16 @@ It's built phone first. On a phone the chat takes the whole screen, the combat b
 | Your premise | The opening it builds |
 | --- | --- |
 | ![Phone premise](docs/m05-premise.png) | ![Phone premise opening](docs/m06-premise-opening.png) |
+
+A premise world gets its own monsters, gear and abilities. These are from a "drowned cathedral" run: Silt-Walkers that grab you and leave you weakened, and loot like a Vial of Abyssal Oil that does frost damage and slows whatever it hits.
+
+| Generated monster and its signature move | Generated loot |
+| --- | --- |
+| ![Generated combat](docs/07-generated-combat.png) | ![Generated loot](docs/08-generated-loot.png) |
+
+| Generated monster and its signature move | Generated loot |
+| --- | --- |
+| ![Phone generated combat](docs/m07-generated-combat.png) | ![Phone generated loot](docs/m08-generated-loot.png) |
 
 | Exploring | Talking | Fighting |
 | --- | --- | --- |
@@ -60,9 +70,17 @@ flowchart TD
 - **Game Master** (`dungeon/agents.py`) is an `LlmAgent` with 15 function tools. It talks to you and decides which tool fits what you said, but it can't change anything itself. It narrates what the tools hand back.
 - **World keeper** is the old Archivist idea, done in code instead of a prompt (`dungeon/world.py`). Moving, inspecting, picking up, resting and skill checks are all validated against the state, so "I pick up the tavern" just fails.
 - **Dialogue agent** plays one NPC at a time. It gets that NPC's personality, goals, what they remember about you, how much they like you (0 to 100), the secrets they could share and the quests they could offer. It replies with a line plus structured choices: how their opinion changes, whether they share a secret, offer a quest or turn hostile. `dungeon/dialogue.py` then applies those within the rules. A secret only comes out if they like you enough (or you just passed a persuade roll), and "turn hostile" is ignored unless the relationship has actually gone bad. Persuade and intimidate are real d20 rolls against your stats, and a bribe costs real gold.
-- **Combat engine** (`dungeon/combat.py`) is plain Python: initiative, AC, to-hit and damage rolls, crits on a natural 20, Defend, items, Power Strike and Second Wind, Flee as a Dex check, status effects (poisoned, burning, bleeding, stunned), enemies picking their own moves, then XP, loot and levelling. The dice are seeded and the roll count is saved, so loading a save carries on with the same sequence. The model only narrates the log.
-- **Your premise** goes to the Creator first. It writes the opening (a starting place, two or three places around it, two or three people, a quest hook and a short note on setting and tone), and `dungeon/premise.py` checks all of it before it goes into the game: unknown items and monsters are dropped, the quest's target is made sure to exist, and there's always somewhere to rest. Monsters keep their stats but get names that fit, so a bandit can be a Guild Enforcer. The premise and setting live in the session state, so saves keep them, and the Game Master, Dialogue agent and Creator all get told about it every time, in Live mode and in the text fallback. If the Creator can't build it (quota, or no key), you start in Emberfall and get told why.
-- **Creator** builds a new location when you walk through an unexplored exit. It can only use items and monsters the engine already knows about, so it can't invent a monster with 900 HP. Results are cached on disk, so the same lane builds the same place without another API call.
+- **Combat engine** (`dungeon/combat.py`) is plain Python: initiative, AC, to-hit and damage rolls, crits on a natural 20, Defend, items, Power Strike and Second Wind, Flee as a Dex check, status effects, damage types with resistances and weaknesses, enemies picking their own moves, then XP, loot and levelling. The dice are seeded and the roll count is saved, so loading a save carries on with the same sequence. The model only narrates the log.
+- **Your premise** goes to the Creator first. It writes the opening (a starting place, two or three places around it, two or three people, a quest hook and a short note on setting and tone), and `dungeon/premise.py` checks all of it before it goes into the game: unknown items and monsters are dropped, the quest's target is made sure to exist, and there's always somewhere to rest. The premise and setting live in the session state, so saves keep them, and the Game Master, Dialogue agent and Creator all get told about it every time, in Live mode and in the text fallback. If the Creator can't build it (quota, or no key), you start in Emberfall and get told why.
+- **Creator** builds a new location when you walk through an unexplored exit. It can reuse the world's monsters and items or add new ones. Results are cached on disk, so the same lane builds the same place without another API call.
+- **The forge** (`dungeon/forge.py`) is how premise worlds get new content without the model being able to break the game. The Creator picks a name, a description, an archetype and a tier (1 to 3), and never writes a number. Python does the numbers.
+  - Monsters are a brute, skirmisher, caster, swarm, beast, tank or boss, and each one plays differently. Brutes hit hard, skirmishers are hard to hit, casters lean on abilities, swarms come in numbers, tanks soak damage, and bosses fight alone with more HP and two uses of their moves. HP, AC, attack and XP come from a table for that archetype and tier.
+  - Items are a light or heavy weapon, ranged weapon, focus, light or heavy armour, shield, potion, bomb, tonic, trinket or scroll, with stats from a budget for their tier.
+  - Abilities are built from a small set of vetted blocks: damage of a type, hitting several targets or chaining, heal, shield, a status, push back, escape, cure, or summon (capped at four enemies on the field). Each extra block or target makes the dice smaller, so a move that does three things does each one less well.
+  - The statuses are poisoned, burning, bleeding, stunned, weakened, blinded, slowed, regen, shielded and hasted. Damage types are physical, fire, frost, shock, poison, radiant, necrotic and psychic. A monster can resist at most one, never physical, and only if it also has a weakness.
+  - Generated monsters get one or two signature abilities and an enemy AI that uses them sensibly (patch itself up or call for help when it gets hurt, use its signature moves while they last). Items can carry an on-hit effect or a use effect, scrolls and quest rewards can teach you an ability, and each world gets its own loot tables.
+  - Anything that doesn't fit is repaired or dropped: unknown archetypes fall back to a sensible one, tiers are clamped, bosses only show up far enough out and when you've levelled, and encounters are fitted to a budget for that area.
+  - Emberfall still uses the hand-made content, and old saves load as before.
 - **Scribe** runs every few turns in the background and adds short story notes to the journal. Quest and combat entries come straight from the engine.
 
 ### ADK features used
@@ -106,6 +124,23 @@ docker run -p 8010:8010 --env-file .env ai-dungeon
 
 The mic needs either localhost or HTTPS, because browsers only allow microphone access on secure pages.
 
+## Balance
+
+`scripts/balance.py` makes random but valid worlds with the forge and plays them through the real combat engine with a simple sensible player (attack the weakest, use abilities and potions when it makes sense). It's deterministic, so the same run gives the same numbers. Across 100 generated worlds with 25 seeds each, I got:
+
+| Fight | Win rate |
+| --- | --- |
+| Emberfall wolves, level 1 | 93.5% |
+| Generated opening fights, level 1 | 94.9% |
+| Same, with a quest reward ability | 94.6% |
+| Tier 2 areas, level 2 | 89.0% |
+| Tier 3 areas, level 3 | 89.6% |
+| Bosses | 89.2% |
+
+```
+python scripts/balance.py 100 25    
+```
+
 ## Tests
 
 ```
@@ -113,7 +148,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-There are 96 tests. They cover the dice, combat rules (initiative, hits, crits, Defend, status effects, abilities, items, fleeing, victory, defeat, loot and levelling), moving between the three modes, building a world from a premise (and falling back when that fails), NPC disposition, secrets, quests, trading and hostility, the ADK tools with the Dialogue and Creator agents faked, saving and loading, the HTTP endpoints and the quota fallbacks. Gemini is never called, and the key is removed from the environment during the run so nothing can reach it by accident. Coverage of the engine modules is around 90%.
+There are 111 tests. They cover the dice, combat rules (initiative, hits, crits, Defend, status effects, abilities, items, fleeing, victory, defeat, loot and levelling), moving between the three modes, building a world from a premise (and falling back when that fails), the forge (budgets, clamping, repair, abilities, loot tables, the enemy AI), a short balance run, NPC disposition, secrets, quests, trading and hostility, the ADK tools with the Dialogue and Creator agents faked, saving and loading, the HTTP endpoints and the quota fallbacks. Gemini is never called, and the key is removed from the environment during the run so nothing can reach it by accident. Coverage of the engine modules is around 90%.
 
 ## Known limitations
 
@@ -124,4 +159,9 @@ There are 96 tests. They cover the dice, combat rules (initiative, hits, crits, 
 - Sessions live in memory, so restarting the server ends any game that hasn't been saved. Saves are JSON files in `saves/`, and there's no login, so anyone who can reach the server can see the list.
 - There's one character class and the world is small: four hand-made places plus whatever the Creator builds.
 - Openings are cached by premise to save quota, so typing exactly the same premise again gives you the same world. Change a word to get a new one.
-- A premise world still runs on the same rules and the same dozen items and four monster types underneath, renamed to fit. A sci-fi premise works, but your sword is still a sword.
+- Generated content is still built from a fixed set of archetypes and blocks, so a premise world plays differently but won't invent a brand new mechanic.
+- The balance numbers come from the simulator, not from lots of real people playing. A reckless player will lose more often.
+- The Creator sometimes returns fewer monsters or items than asked for, and the names it picks can still be a bit generic.
+- The Game Master sometimes makes up details in its narration, like a resistance a monster doesn't actually have. The numbers in the log and the HUD are the real ones.
+- The weapon you start with in a premise world is tier 1 on purpose, so it can feel weaker than the Emberfall sword for the first fight or two.
+- Bosses only turn up a few places out from the start once you've levelled, so a short session might not meet one.
