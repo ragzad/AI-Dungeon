@@ -17,8 +17,9 @@
 <body>
 <div id="app" class="app">
   <header class="topbar">
-    <button class="icon-btn only-mobile" id="btn-drawer" aria-label="Character, map and journal">
-      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    <button class="icon-btn only-mobile bag-btn" id="btn-drawer" aria-label="Bag, map and journal">
+      <svg viewBox="0 0 24 24"><path d="M6 8h12l1 12H5z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
+      <i class="badge" id="bag-badge" hidden></i>
     </button>
     <div class="brand"><img class="brand-mark" src="/static/favicon.svg" alt=""><span class="brand-text" id="brand-text">Emberfall</span></div>
     <span class="mode-pill" id="mode-pill" data-mode="exploration">Exploring</span>
@@ -35,6 +36,7 @@
   </header>
 
   <section class="hud" id="hud" hidden></section>
+  <button type="button" class="objective" id="objective" hidden aria-label="Current objective, open the journal"></button>
 
   <main class="stage">
     <div class="stream" id="stream" aria-live="polite"></div>
@@ -53,7 +55,12 @@
     </div>
     <div class="side-body">
       <section class="panel" data-panel="sheet" id="sheet"></section>
-      <section class="panel" data-panel="map"><h3>Map</h3><div id="map"></div><p class="loc-line" id="loc-line"></p></section>
+      <section class="panel" data-panel="map"><h3>Map</h3>
+        <div class="map-wrap"><div id="map"></div>
+          <div class="map-tools"><button type="button" class="mini" data-zoom="in" aria-label="Zoom in">+</button><button type="button" class="mini" data-zoom="out" aria-label="Zoom out">−</button><button type="button" class="mini" data-zoom="here" aria-label="Centre on me">◎</button></div>
+        </div>
+        <div class="map-info" id="map-info"></div>
+        <p class="map-key"><span><i class="k-here"></i>you</span><span><i class="k-seen"></i>visited</span><span><i class="k-new"></i>not yet</span><span><i class="k-lair"></i>lair</span><span>🔒 locked</span></p></section>
       <section class="panel" data-panel="journal" id="journal"></section>
     </div>
   </aside>
@@ -62,7 +69,7 @@
   <footer class="dock" id="dock">
     <div class="chips" id="chips"></div>
     <div class="actionbar" id="actionbar" hidden></div>
-    <form class="inputbar" id="inputbar" autocomplete="off">
+    <form class="inputbar" id="inputbar" autocomplete="off" onsubmit="return false">
       <button type="button" class="mic" id="btn-mic" aria-label="Talk to the Game Master" aria-pressed="false">
         <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
       </button>
@@ -85,7 +92,7 @@
 <div class="sheet-modal" id="menu-sheet" hidden>
   <div class="sheet-card" role="dialog" aria-label="Save and load">
     <h3>Save game</h3>
-    <form id="save-form" class="row">
+    <form id="save-form" class="row" onsubmit="return false">
       <input id="save-name" type="text" placeholder="Save name" maxlength="40">
       <button class="btn" type="submit">Save</button>
     </form>
@@ -103,7 +110,7 @@
     <p class="eyebrow">A realtime adventure</p>
     <h1>AI Dungeon</h1>
     <p class="lede">Talk your way through it, or fight. Describe the story you want, or leave it to me and you'll arrive in Emberfall, where the forest burned and never quite stopped.</p>
-    <form id="start-form">
+    <form id="start-form" onsubmit="return false">
       <label for="hero-name">Your name</label>
       <input id="hero-name" type="text" value="Wren" maxlength="24" autocomplete="off">
       <label for="premise">Describe your adventure <span class="optional">(optional)</span></label>
@@ -115,7 +122,7 @@
         <button type="button" class="chip" data-premise="A plague village in the marshes where the dead won't stay buried">A plague village</button>
         <button type="button" class="chip" data-premise="Smugglers and spirits in a frozen northern port">A frozen smugglers' port</button>
       </div>
-      <button class="btn big wide" type="submit" id="btn-begin">Begin</button>
+      <button class="btn big wide" type="submit" id="btn-begin" disabled>Loading…</button>
     </form>
     <div id="title-saves" class="save-list"></div>
     <p class="fineprint">The Game Master speaks out loud. Use the speaker button to mute, or the mic to talk back.</p>
