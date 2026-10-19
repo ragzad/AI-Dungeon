@@ -33,7 +33,7 @@ async def passcode_gate(request: Request, call_next):
 
 
 def _client_ip(request):
-    # behind the Cloudflare tunnel every request comes from localhost, so use the address it passes on
+    # behind a tunnel or proxy, use the address it passes on (uvicorn --proxy-headers fills client.host)
     return request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
 
 

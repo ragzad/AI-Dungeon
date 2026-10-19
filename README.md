@@ -134,7 +134,7 @@ Or with Docker:
 
 ```
 docker build -t ai-dungeon .
-docker run -p 8010:8010 --env-file .env ai-dungeon
+docker run -p 8010:7860 --env-file .env ai-dungeon   # then open localhost:8010
 ```
 
 The mic needs either localhost or HTTPS, because browsers only allow microphone access on secure pages.
