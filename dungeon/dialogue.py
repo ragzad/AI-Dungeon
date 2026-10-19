@@ -1,5 +1,5 @@
 """Conversation rules. The Dialogue agent writes the words; this decides what they do."""
-from . import combat
+from . import combat, people
 from .state import (GameError, learn, add_item, attitude, inventory_options, item_info, journal, location,
                     match, npc, npcs_here, remove_item)
 from .world import end_dialogue
@@ -13,7 +13,7 @@ def start(g, who, d):
         raise GameError("Words won't help now. You're in a fight.")
     if g["mode"] == "dead":
         raise GameError("You are dead.")
-    nid = who if who in npcs_here(g) else match(who, npcs_here(g))
+    nid = people.find_here(g, who)
     if not nid:
         raise GameError(f"There's nobody called '{who}' here.")
     n = npc(g, nid)
@@ -25,7 +25,7 @@ def start(g, who, d):
     g["dialogue"] = {"npc_id": nid, "suggested": [], "last_line": None, "turns": 0, "mood": attitude(n["disposition"])}
     if g["combat"] and g["combat"].get("outcome"):
         g["combat"] = None
-    result = {"talking_to": n["name"], "first_meeting": first, "attitude": attitude(n["disposition"]),
+    result = {"talking_to": people.label(n), "first_meeting": first, "attitude": attitude(n["disposition"]),
               "quests_turned_in": turn_in(g, nid)}
     return result
 
@@ -36,6 +36,8 @@ def brief(g, nid):
     quests = {qid: g["world"]["quests"][qid] for qid in n["quests"]}
     return {
         "npc_id": nid, "name": n["name"], "role": n["role"], "personality": n["personality"], "voice": n["voice"],
+        "player_knows_your_name": people.known(n),
+        "player_calls_you": people.label(n),
         "goals": n["goals"], "disposition": n["disposition"], "attitude": attitude(n["disposition"]),
         "memory_of_player": n["memory"][-8:], "met_before": len(n["memory"]) > 0,
         "secrets_you_could_share": [{"id": s["id"], "text": s["text"], "needs_disposition": s["min_disposition"]}
@@ -106,6 +108,7 @@ def apply_reply(g, nid, player_line, reply, check, d):
         q = g["world"]["quests"][qid]
         if q["status"] == "available":
             q["status"] = "active"
+            q["started"] = g["meta"]["turn"] + 1
             goal = q["goal"]
             if goal["type"] == "defeat" and q["progress"] >= goal.get("count", 1):
                 q["status"] = "ready"
@@ -118,6 +121,11 @@ def apply_reply(g, nid, player_line, reply, check, d):
         hostile = True
     suggested = [str(s)[:80] for s in (reply.get("suggested_replies") or [])][:3]
     line = str(reply.get("line") or "...")[:600]
+    # names are learned by hearing them: their own when they introduce themselves, anyone else's they mention
+    learned = [people.reveal(g, nid)] if reply.get("introduced") else []
+    learned = [x for x in learned + people.reveal_in(g, line) if x]
+    if learned:
+        effects["learned_names"] = learned
     g["dialogue"].update(last_line=line, suggested=suggested, mood=str(reply.get("mood") or attitude(n["disposition"]))[:30])
     g["dialogue"]["turns"] += 1
     g["meta"]["turn"] += 1
@@ -130,7 +138,7 @@ def start_fight(g, nid, d, intro):
     n = npc(g, nid)
     n["hostile"] = True
     spec = {"template": n["combat"]["template"], "npc_id": nid, **{k: v for k, v in n["combat"].items() if k != "template"}}
-    spec.setdefault("name", n["name"])
+    spec["name"] = people.label(n)  # you fight who you see; a stranger stays a stranger
     end_dialogue(g)
     fight = combat.start_combat(g, [spec], d, intro=intro)
     journal(g, f"Fought {n['name']}.", "combat")
@@ -190,7 +198,7 @@ def trade(g, action, item):
 
 
 def give(g, who, item):
-    nid = who if who in npcs_here(g) else match(who, npcs_here(g))
+    nid = people.find_here(g, who)
     if not nid:
         raise GameError(f"There's nobody called '{who}' here.")
     iid = match(item, inventory_options(g))
@@ -244,6 +252,7 @@ def unlock_after(g, qid):
         if q.get("unlocks_after") != qid or q["status"] != "locked":
             continue
         q["status"] = "active"
+        q["started"] = g["meta"]["turn"] + 1
         if q["goal"]["type"] == "defeat" and q["progress"] >= q["goal"].get("count", 1):
             q["status"] = "ready"
         journal(g, f"New quest: {q['title']}. {q['desc']}", "quest")

@@ -153,6 +153,7 @@ def new_world():
     npcs = {
         "maren": {
             "name": "Maren Holt", "role": "innkeeper of the Gutter Lantern", "location_id": "tavern",
+            "descriptor": "the innkeeper",
             "personality": "Warm, quick-witted and shrewd. Lost her husband to the forest two winters ago and won't be pitied.",
             "voice": "Brisk local dialect, calls people 'love', dry humour.",
             "goals": ["Keep the inn going", "Get her late husband's locket back", "Stop the wolves taking the supply carts"],
@@ -167,6 +168,7 @@ def new_world():
         },
         "corwin": {
             "name": "Corwin Vane", "role": "card sharp and petty thief", "location_id": "tavern",
+            "descriptor": "the card player in the corner",
             "personality": "Charming on the surface, prickly and proud underneath. Hates being called a thief. Quick to draw a knife if cornered.",
             "voice": "Smooth, theatrical, a bit too polite.",
             "goals": ["Win enough at cards to leave Emberfall", "Keep the locket he stole", "Avoid the watch"],
@@ -182,6 +184,7 @@ def new_world():
         },
         "brannoc": {
             "name": "Brannoc", "role": "village smith", "location_id": "smithy",
+            "descriptor": "the smith",
             "personality": "Gruff, honest, few words. Respects people who pay fairly and hates haggling.",
             "voice": "Short sentences. Grunts. Very occasional dark joke.",
             "goals": ["Sell enough to buy coal for winter", "Find out what is burning in the Ashwood"],
@@ -201,7 +204,7 @@ def new_world():
                    "progress": 0, "reward": {"gold": 25, "xp": 50}},
         "locket": {"title": "Maren's Locket", "giver": "maren", "status": "available",
                    "desc": "Find the silver locket Maren lost and bring it back to her.",
-                   "goal": {"type": "deliver", "item": "silver_locket", "to": "maren"},
+                   "goal": {"type": "deliver", "item": "silver_locket", "to": "maren"}, "contact": "corwin",
                    "progress": 0, "reward": {"gold": 15, "xp": 60, "disposition": 20}},
     }
     return {"locations": locations, "npcs": npcs, "quests": quests}

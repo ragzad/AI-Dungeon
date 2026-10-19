@@ -54,7 +54,7 @@ async def test_npc_lines_are_handed_over_word_for_word(monkeypatch):
     r = tools.talk_to("Maren", ctx)
     assert "Don't speak as them" in r["narrate"]
     r = await tools.say_to_npc("Any work?", ctx)
-    assert r["speak_exactly"] == 'Maren Holt: "Two wolves. Bring me the pelts."' and "word for word" in r["how"]
+    assert r["speak_exactly"] == 'The innkeeper: "Two wolves. Bring me the pelts."' and "word for word" in r["how"]
     assert "never add a second line" in agents.GM_INSTRUCTION
 
 

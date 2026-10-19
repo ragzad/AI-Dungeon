@@ -11,7 +11,7 @@ def test_describe_lists_exits_people_items(g):
     put_in(g, "tavern")
     d = world.describe(g)
     assert d["location"] == "The Gutter Lantern"
-    assert any("Maren Holt" in p for p in d["people"])
+    assert any("the innkeeper (name not known yet" in p for p in d["people"])
     assert d["exits"] == ["south: Emberfall Square"]
 
 

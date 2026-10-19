@@ -15,7 +15,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from . import agents, combat, config, dialogue, names, premise, state, world
+from . import agents, combat, config, dialogue, names, people, premise, quests, state, world
 from .plugins import GamePlugin, is_quota_error
 from .state import GameError
 
@@ -115,6 +115,7 @@ class Hub:
         d = state.dice(g)
         result = fn(g, d)
         state.store_dice(g, d)
+        quests.sync(g)
         changed = state.delta(session.state, g)
         if changed:
             event = Event(author="engine", invocation_id=f"e-{uuid.uuid4().hex[:12]}",
@@ -156,7 +157,7 @@ def button_action(g, d, msg):
     if kind == "end_conversation":
         if g["mode"] != "dialogue":
             raise GameError("You aren't talking to anyone.")
-        name = state.npc(g, g["dialogue"]["npc_id"])["name"]
+        name = people.label(state.npc(g, g["dialogue"]["npc_id"]))
         world.end_dialogue(g)
         return [f"{g['player']['name']} ends the conversation with {name}."]
     if kind == "trade":
@@ -357,6 +358,7 @@ class GameSession:
             await self.send({"type": "notice", "level": "info", "text": str(exc)})
             return
         await self.push_state()
+        lines = people.mask_deep(g, lines)
         if lines:
             await self.send({"type": "engine", "lines": lines})
             facts = (" " + combat.facts(g)) if g.get("combat") else ""
@@ -371,12 +373,15 @@ class GameSession:
     async def _guard(self, text):
         """Light guards on what the Game Master said. The voice has already gone out, but the
         text on screen can be put right."""
+        g = await self.hub.game(self.sid)
         if self.turns == 0:
-            g = await self.hub.game(self.sid)
             if g["meta"].get("origin") != "loaded" and re.search(r"\bwelcome back\b", text, re.I):
                 log.info("guard: 'welcome back' on a new game")
                 text = re.sub(r"\b(W|w)elcome back\b", lambda m: m.group(1) + "elcome", text)
-        return text
+        hidden = people.mask(g, text)
+        if hidden != text:
+            log.info("guard: narration used a name the player hasn't learned")
+        return hidden
 
     async def _check_turn(self):
         """After a combat turn, compare what was said against the real fight."""
@@ -435,7 +440,8 @@ def opener(g, loaded=False):
     if s:
         giver = next((g["world"]["npcs"][q["giver"]] for q in g["world"]["quests"].values()
                       if q["status"] != "locked"), None)
-        hook = f" Hint that {giver['name']}, the {giver['role']}, might have work for them." if giver else ""
+        who = f"{giver['name']}, the {giver['role']}," if giver and people.known(giver) else (people.label(giver) if giver else "")
+        hook = f" Hint that {who} might have work for them." if giver else ""
         weapon = state.item_info(p["equipped"]["weapon"], g)["name"] if p["equipped"].get("weapon") else None
         kit = f" They carry their own {weapon}." if weapon else ""
         return (f"[start new] New game in {s['name']}, built from the player's premise: \"{s['premise']}\". "

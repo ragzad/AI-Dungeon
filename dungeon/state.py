@@ -19,7 +19,7 @@ class GameError(Exception):
 
 
 def new_game(name="Wren", seed=None):
-    return {
+    g = {
         "meta": {"version": VERSION, "turn": 0, "created": int(time.time()),
                  "rng": {"seed": seed if seed is not None else random.randrange(1 << 30), "count": 0},
                  "location_id": "square", "prev_location_id": None, "log": [], "setting": None,
@@ -31,6 +31,16 @@ def new_game(name="Wren", seed=None):
         "dialogue": None,
         "journal": [],
     }
+    return prepare(g)
+
+
+def prepare(g):
+    """Strangers start unnamed and every quest gets its checklist."""
+    from . import people, quests
+    people.prepare(g)
+    quests.ensure(g)
+    quests.sync(g, quiet=True)
+    return g
 
 
 def load(state):
@@ -279,41 +289,60 @@ def public_view(g):
                        "generated": k not in content.ABILITIES, "target": a.get("target", "enemy")}
                       for k, v in p["abilities"].items() for a in [ability_info(k, g)] if a],
     }
+    from . import people, quests as questbook
     known = {}
     for lid, l in world["locations"].items():
         if l.get("visited") or lid == loc_id or _adjacent(world, loc_id, lid):
-            known[lid] = {"name": l["name"], "x": l["x"], "y": l["y"], "visited": bool(l.get("visited")) or lid == loc_id,
+            seen = bool(l.get("visited")) or lid == loc_id
+            known[lid] = {"name": l["name"], "x": l["x"], "y": l["y"], "visited": seen,
                           "links": [d for d in l["exits"].values() if isinstance(d, str)],
                           "gate": l.get("min_level") if p["level"] < l.get("min_level", 0) else None,
-                          "boss": bool(l.get("boss") and l.get("encounter"))}
+                          "boss": bool(l.get("boss") and l.get("encounter")),
+                          "lair": bool(l.get("boss")),
+                          "unexplored": sum(1 for d in l["exits"].values() if not isinstance(d, str)) if seen else 0,
+                          # who you've seen there; places you haven't been keep their people to themselves
+                          "people": [_person(g, nid) for nid in l["npcs"] if npc(g, nid)["alive"]] if seen else []}
     dialogue = None
     if g["dialogue"]:
         n = npc(g, g["dialogue"]["npc_id"])
         from .dialogue import price, stock
         nid = g["dialogue"]["npc_id"]
-        dialogue = {**g["dialogue"], "name": n["name"], "role": n["role"], "disposition": n["disposition"],
+        dialogue = {**g["dialogue"], "name": people.label(n), "known": people.known(n), "role": n["role"],
+                    "disposition": n["disposition"],
                     "attitude": attitude(n["disposition"]), "memories": len(n["memory"]),
                     "sells": [{"id": i, "name": nm, "price": price(g, nid, i)} for i, nm in stock(n, g).items()],
                     "buys": bool(n["trades"].get("buys"))}
-    quests = [{"id": qid, **{k: q[k] for k in ("title", "status", "desc", "progress")}}
+    quests = [{"id": qid, **{k: q[k] for k in ("title", "status", "desc", "progress")},
+               "objectives": questbook.view(g, q), "started": q.get("started", 0)}
               for qid, q in world["quests"].items() if q["status"] not in ("available", "locked")]
-    return {
+    view = {
         "mode": g["mode"],
         "turn": g["meta"]["turn"],
         "setting": _setting_view(g),
         "player": player,
         "location": {"id": loc_id, "name": loc["name"], "desc": loc["desc"], "exits": exits,
                      "items": [{"id": i["id"], "name": item_info(i["id"], g)["name"], "qty": i["qty"]} for i in loc["items"]],
-                     "npcs": [{"id": nid, "name": npc(g, nid)["name"], "role": npc(g, nid)["role"],
-                               "attitude": "hostile" if npc(g, nid)["hostile"] else attitude(npc(g, nid)["disposition"])}
-                              for nid in loc["npcs"] if npc(g, nid)["alive"]],
+                     "npcs": [_person(g, nid) for nid in loc["npcs"] if npc(g, nid)["alive"]],
                      "features": list(loc.get("features", {}).keys()), "rest": bool(loc.get("rest"))},
         "map": known,
         "combat": g["combat"],
         "dialogue": dialogue,
         "journal": g["journal"][-30:],
         "quests": quests,
+        "objective": questbook.current(g),
+        "learned": [x["name"] for x in g["meta"].get("learned", [])],
     }
+    # nothing the player hasn't learned leaves the server, wherever it's written
+    view = people.mask_deep(g, view)
+    view["player"]["name"] = p["name"]
+    return view
+
+
+def _person(g, nid):
+    from . import people
+    n = npc(g, nid)
+    return {"id": nid, "name": people.label(n), "known": people.known(n), "role": n["role"],
+            "attitude": "hostile" if n["hostile"] else attitude(n["disposition"])}
 
 
 def _item_stats(info):
@@ -333,8 +362,8 @@ def _combat_usable(info):
 def _setting_view(g):
     s = g["meta"].get("setting")
     if not s:
-        return {"name": "Emberfall", "premise": None}
-    return {"name": s["name"], "premise": s["premise"]}
+        return {"name": "Emberfall", "premise": None, "currency": "gold"}
+    return {"name": s["name"], "premise": s["premise"], "currency": s.get("currency") or "coins"}
 
 
 def _adjacent(world, a, b):
@@ -372,6 +401,10 @@ def from_save(text):
         raise GameError(f"Save is missing {', '.join(missing)}.")
     if g["mode"] not in MODES:
         raise GameError("Save has an unknown mode.")
+    from . import people, quests
+    people.upgrade(g)  # older saves: everyone already known
+    quests.ensure(g)
+    quests.sync(g, quiet=True)
     return g
 
 

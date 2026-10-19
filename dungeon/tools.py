@@ -4,7 +4,7 @@ import logging
 
 from google.adk.tools.tool_context import ToolContext
 
-from . import combat, dialogue, names, state, world
+from . import combat, dialogue, names, people, quests, state, world
 from .state import GameError
 
 log = logging.getLogger(__name__)
@@ -20,11 +20,23 @@ def _run(tool_context, fn):
     except GameError as exc:
         return {"ok": False, "refused": str(exc), "mode": g["mode"]}
     state.store_dice(g, d)
+    ticked = quests.sync(g)
     state.commit(tool_context.state, g)
     out = {"ok": True, **result, "mode": g["mode"]}
     if g.get("combat"):
         out["facts"] = combat.facts(g)
-    return out
+    return finish(g, out, ticked)
+
+
+def finish(g, out, ticked=()):
+    """Last touches on every tool result: objectives just done, and no names the player hasn't learned."""
+    if ticked:
+        out["objectives_done"] = [f"{title}: {text}" for title, text in ticked]
+    strangers = people.brief(g)
+    if strangers:
+        out["strangers"] = (f"The player doesn't know the names of: {', '.join(strangers)}. Call them only that, "
+                            "until they give their name in say_to_npc or someone names them.")
+    return people.mask_deep(g, out)
 
 
 def look_around(tool_context: ToolContext) -> dict:
@@ -125,16 +137,20 @@ async def say_to_npc(words: str, tool_context: ToolContext, approach: str = "pla
     except GameError as exc:
         return {"ok": False, "refused": str(exc), "mode": g["mode"]}
     state.store_dice(g, d)
+    ticked = quests.sync(g)
     state.commit(tool_context.state, g)
-    name = state.npc(g, nid)["name"]
+    name = people.label(state.npc(g, nid))
     out = {"ok": True, "npc": name, "npc_says": reply.get("line"), "effects": effects, "mode": g["mode"],
-           "speak_exactly": f"{name}: \"{reply.get('line')}\"",
+           "speak_exactly": f"{name[0].upper() + name[1:]}: \"{reply.get('line')}\"",
            "how": "Say npc_says word for word in their voice. Don't shorten, reword or add to it."}
+    if effects.get("learned_names"):
+        out["names_learned"] = ("The player now knows: " + ", ".join(effects["learned_names"]) +
+                                ". Use these names from now on.")
     if g.get("combat"):
         out["facts"] = combat.facts(g)
     if check:
         out["check"] = check
-    return out
+    return finish(g, out, ticked)
 
 
 def trade(action: str, item: str, tool_context: ToolContext) -> dict:
@@ -152,7 +168,7 @@ def end_conversation(tool_context: ToolContext) -> dict:
     def go(g, d):
         if g["mode"] != "dialogue":
             raise GameError("You aren't talking to anyone.")
-        name = state.npc(g, g["dialogue"]["npc_id"])["name"]
+        name = people.label(state.npc(g, g["dialogue"]["npc_id"]))
         world.end_dialogue(g)
         return {"left": name}
     return _run(tool_context, go)
@@ -163,10 +179,10 @@ def attack(target: str, tool_context: ToolContext) -> dict:
     def go(g, d):
         if g["mode"] == "combat":
             return combat.player_action(g, "attack", d, target=target) | {"status": combat.summary(g)}
-        nid = state.match(target, state.npcs_here(g))
+        nid = people.find_here(g, target)
         if not nid:
             raise GameError(f"There's nobody called '{target}' here to attack.")
-        return dialogue.start_fight(g, nid, d, f"You go for {state.npc(g, nid)['name']}!")
+        return dialogue.start_fight(g, nid, d, f"You go for {people.label(state.npc(g, nid))}!")
     return _run(tool_context, go)
 
 

@@ -62,7 +62,8 @@ def test_public_view_hides_secrets(g):
     view = state.public_view(g)
     text = json.dumps(view)
     assert "locket from Maren's room" not in text
-    assert view["location"]["npcs"][0]["name"] == "Maren Holt"
+    assert view["location"]["npcs"][0]["name"] == "the innkeeper"
+    assert "Maren" not in json.dumps(view)
     assert view["quests"] == []  # nothing accepted yet
 
 

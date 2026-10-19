@@ -52,7 +52,7 @@ async def test_refusal_leaves_state_alone(ctx, fake_agents):
 async def test_conversation_flow(ctx, fake_agents):
     await tools.move("north", ctx)
     r = tools.talk_to("Maren", ctx)
-    assert r["mode"] == "dialogue" and r["npc"]["name"] == "Maren Holt"
+    assert r["mode"] == "dialogue" and r["npc"]["name"] == "The innkeeper"
     r = await tools.say_to_npc("Need a hand?", ctx)
     assert r["npc_says"].startswith("Wolves")
     assert r["effects"]["quest_started"] == "The Ashwood Howls"

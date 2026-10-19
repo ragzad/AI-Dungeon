@@ -93,7 +93,7 @@ def test_unusable_openings_are_refused(broken):
 
 def test_premise_game_plays_and_saves(tmp_path):
     g = premise.apply(state.new_game("Wren", seed=3), "a heist in a floating city", json.loads(json.dumps(OPENING)))
-    assert state.public_view(g)["setting"] == {"name": "Skyreach", "premise": "a heist in a floating city"}
+    assert state.public_view(g)["setting"] == {"name": "Skyreach", "premise": "a heist in a floating city", "currency": "coins"}
     assert not any(i["id"] == "old_map" for i in g["player"]["inventory"])
     d = state.dice(g)
     result = world.move(g, "east", d)
@@ -139,7 +139,9 @@ async def test_dialogue_and_creator_requests_carry_the_setting(monkeypatch, tmp_
 def test_opener_uses_the_premise():
     g = premise.apply(state.new_game("Wren", seed=3), "a heist in a floating city", json.loads(json.dumps(OPENING)))
     text = live.opener(g)
-    assert "a heist in a floating city" in text and "Vex Marlowe" in text and "Emberfall" not in text
+    assert "a heist in a floating city" in text and "Emberfall" not in text
+    # the hook points at the giver by how they look: the player hasn't learned the name yet
+    assert "the fixer" in text and "Vex Marlowe" not in text
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ it against what the engine can actually run before anything goes in the save."""
 import hashlib
 import re
 
-from . import content, forge, names
+from . import content, forge, names, state
 from .state import GameError, item_info, journal, monster_info, norm
 
 MAX_PREMISE = 300
@@ -30,8 +30,9 @@ def setting_text(g):
     s = (g.get("meta") or {}).get("setting")
     if not s:
         return DEFAULT_SETTING
+    money = f" Money here is called {s['currency']}; say that rather than gold." if s.get("currency") else ""
     return (f"{s['name']}. The player asked for this story: \"{s['premise']}\". {s['blurb']} "
-            f"Tone: {s['tone']}.")
+            f"Tone: {s['tone']}.{money}")
 
 
 def _s(value, limit, default=""):
@@ -339,6 +340,7 @@ def build_world(spec, seed=""):
                 sells.append(iid)
         npcs[nid] = {
             "name": nname, "role": _s(n.get("role"), 60, "local"), "location_id": where,
+            "descriptor": _s(n.get("descriptor"), 48),
             "personality": _s(n.get("personality"), 300), "voice": _s(n.get("voice"), 120),
             "goals": [_s(x, 100) for x in (n.get("goals") or [])[:3]],
             "secrets": [{"id": f"{nid}_secret", "text": _s(n.get("secret"), 200), "min_disposition": 55}]
@@ -388,6 +390,9 @@ def build_world(spec, seed=""):
             ab = forge.make_ability(hook["reward_ability"], 1, owner="player", taken=world["abilities"])
             world["abilities"][ab["id"]] = ab
             q["reward"]["ability"] = ab["id"]
+        contact = next((nid for nid, n in npcs.items() if nid != giver and norm(n["name"]) == norm(hook.get("contact") or "")), None)
+        if contact:
+            q["contact"] = contact
         world["quests"]["hook"] = q
         npcs[giver]["quests"].append("hook")
 
@@ -448,7 +453,7 @@ def build_world(spec, seed=""):
     world["loot"] = forge.loot_tables({k: v for k, v in world["items"].items() if k != kit.get("weapon")})
 
     setting = {"name": _s(spec.get("setting_name"), 60, name), "tone": _s(spec.get("tone"), 120, "grounded"),
-               "blurb": _s(spec.get("blurb"), 400)}
+               "blurb": _s(spec.get("blurb"), 400), "currency": _currency(spec.get("currency"))}
     return world, setting, kit
 
 
@@ -470,4 +475,12 @@ def apply(g, premise, spec):
     boss = world["quests"].get("boss")
     if boss:
         journal(g, f"Rumour: {boss['rumour']}", "lore")
+    state.prepare(g)
     return g
+
+
+def _currency(text):
+    """'Tide-Pennies.' -> 'tide-pennies'. Falls back to coins."""
+    t = re.sub(r"[^a-z' -]", "", str(text or "").lower()).strip(" -'")
+    t = " ".join(t.split()[:2])
+    return t if 2 < len(t) <= 24 and t not in ("money", "currency") else "coins"

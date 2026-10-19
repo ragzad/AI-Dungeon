@@ -22,6 +22,7 @@ class NpcReply(BaseModel):
     share_secret: Optional[str] = Field(None, description="id of a secret they reveal in this line, or null")
     offer_quest: Optional[str] = Field(None, description="id of a quest they ask the player to do in this line, or null")
     turn_hostile: bool = Field(False, description="True only if they attack or draw a weapon now.")
+    introduced: bool = Field(False, description="True if this line tells the player your name.")
     suggested_replies: list[str] = Field(description="Three short things the player might say next, varied in tone.")
 
 
@@ -87,6 +88,8 @@ class EncounterRef(BaseModel):
 class NewNpc(BaseModel):
     name: str
     role: str
+    descriptor: Optional[str] = Field(None, description="how a stranger would describe them before learning their name, "
+                                      "e.g. 'a hooded woman', 'the barkeep', 'the man with the hook'. Never their name.")
     personality: str
     voice: str
     goals: list[str]
@@ -132,6 +135,8 @@ class QuestHook(BaseModel):
     monster: Optional[str] = Field(None, description="for defeat: name of a tier 1 monster; put it in a place")
     item: Optional[str] = Field(None, description="for find: name of an item from your list")
     reward_ability: Optional[GenAbility] = Field(None, description="a technique the giver teaches as a reward")
+    contact: Optional[str] = Field(None, description="optional: name of a different npc from your list who can point "
+                                   "the player the right way")
 
 
 class BossLair(BaseModel):
@@ -157,6 +162,8 @@ class StartPlaceCore(BaseModel):
 class Opening(BaseModel):
     setting_name: str = Field(description="Short name for the world or place the story is set in.")
     tone: str = Field(description="A few words on the mood, e.g. 'tense, witty, rain-soaked'.")
+    currency: Optional[str] = Field(None, description="what money is called here: one or two lowercase words, plural, "
+                                    "e.g. 'scrip', 'tide-pennies', 'marks'")
     blurb: str = Field(description="2 sentences of background the other storytellers need to stay consistent.")
     starting_weapon: GenItem = Field(description="the player's own tier 1 weapon, suited to the setting, with an "
                                      "on_hit_status that fits it (a hook that bleeds, a torch that burns)")
@@ -224,7 +231,10 @@ dialogue_agent = LlmAgent(
         "- Rudeness, threats and accusations lower disposition. Kindness, help and fair dealing raise it.\n"
         "- turn_hostile only if they would really attack now. Most people walk away or refuse first.\n"
         "- If they sell things, mention a price from the sells list when asked. Never invent items.\n"
-        "- suggested_replies: three short options the player could say next (friendly, practical, edgy)."
+        "- suggested_replies: three short options the player could say next (friendly, practical, edgy).\n"
+        "- Names: if player_knows_your_name is false, the player only knows you as player_calls_you. Say your name only "
+        "if they ask for it or you would naturally introduce yourself, and then set introduced to true. Otherwise "
+        "don't say it. Saying anyone else's name tells the player who they are, so only do it when it's natural."
     ),
     output_schema=NpcReply,
     before_model_callback=_text_only,
@@ -359,6 +369,8 @@ There are three modes, and every tool result tells you the current mode.
 - exploration: describe, move, inspect, pick things up.
 - dialogue: when the player wants to talk to someone, call talk_to, then give one sentence of narration, in your own voice, of that person noticing the player (never ask the player what they want to say). Never speak as an NPC from your own imagination: every word an NPC says comes from say_to_npc. While in dialogue, treat whatever the player says as spoken to that NPC: call say_to_npc with their words (approach persuade, intimidate or bribe if that is what they are doing). Then say npc_says word for word, in their voice, with at most a few words of narration before it (like "Maren snorts:"), and stop. Never summarise, shorten or reword their line, and never add a second line of your own for them. Never end a conversation yourself; only call end_conversation when the player says goodbye or walks off. Use trade for buying and selling.
 - combat: dice are rolled by the engine, never by you. When the player describes a combat move, call combat_action (attack, defend, item, flee, power_strike, second_wind, or any other ability the player has learned, by name). Monsters here can have unusual abilities, resistances and weaknesses. Every combat result and [engine] message carries a FACTS line with each fighter's real HP, AC, moves, resistances and weaknesses. Use only those facts and the log: never invent a resistance, immunity, weakness, number or ability, and if the facts say "resists: nothing", nothing shrugs anything off. When the log says something was resisted or hit a weak spot, make it vivid. Narrate the log you get back, hits and misses and what the enemies did, in 2-3 punchy sentences, and say whose turn it is. On victory, mention the loot. On defeat, describe the fall and tell them they can load a save.
+
+Names: the player only knows a person's name once they have heard it. Tool results show strangers by a description such as "the innkeeper" or "a hooded woman": call them only that, never guess or invent a name for them, and keep using the description until a tool result gives you the name (say_to_npc reports names_learned). Then use the name.
 
 Messages that start with [engine] are things the player did with the on-screen buttons; the engine has already resolved them. Narrate the result in 1-3 sentences and do not call a tool for them.
 Messages that start with [start new] mean a brand-new game: the player has only just arrived, has never been here and has met nobody. Set the scene by name in 2-3 sentences. Never say "welcome back", "again" or "return", and never refer to earlier visits or events.

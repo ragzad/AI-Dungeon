@@ -20,11 +20,13 @@ def describe(g):
             exits.append(f"{direction}: {g['world']['locations'][dest]['name']}")
         else:
             exits.append(f"{direction}: {dest.get('hint', 'somewhere unexplored')} (unexplored)")
+    from . import people as folk
     people = []
     for nid in loc["npcs"]:
         n = npc(g, nid)
         if n["alive"]:
-            people.append(f"{n['name']} ({n['role']}{', hostile' if n['hostile'] else ''})")
+            who = f"{n['name']} ({n['role']}" if folk.known(n) else f"{folk.label(n)} (name not known yet"
+            people.append(who + (", hostile)" if n["hostile"] else ")"))
     return {
         "location": loc["name"],
         "description": loc["desc"],
@@ -146,6 +148,7 @@ def add_location(g, direction, spec):
         if nid not in g["world"]["npcs"]:
             g["world"]["npcs"][nid] = {
                 "name": str(new_npc["name"])[:40], "role": str(new_npc.get("role", "stranger"))[:60],
+                "descriptor": str(new_npc.get("descriptor") or "")[:48],
                 "location_id": new_id, "personality": str(new_npc.get("personality", ""))[:300],
                 "voice": str(new_npc.get("voice", ""))[:120], "goals": [str(x)[:100] for x in new_npc.get("goals", [])[:3]],
                 "secrets": [{"id": f"{nid}_secret", "text": str(new_npc.get("secret", ""))[:200], "min_disposition": 60}]
@@ -159,6 +162,8 @@ def add_location(g, direction, spec):
             loc["npcs"].append(nid)
     g["world"]["locations"][new_id] = loc
     here["exits"][direction] = new_id
+    from . import people as folk
+    folk.prepare(g)  # a newcomer is a stranger too
     return new_id
 
 
@@ -171,11 +176,12 @@ def inspect(g, target):
     fid = match(target, {k: k for k in features})
     if fid:
         return {"feature": fid, "detail": features[fid]}
-    nid = match(target, npcs_here(g))
+    from . import people as folk
+    nid = folk.find_here(g, target)
     if nid:
         n = npc(g, nid)
         from .state import attitude
-        return {"person": n["name"], "role": n["role"], "seems": "hostile" if n["hostile"] else attitude(n["disposition"]),
+        return {"person": folk.label(n), "role": n["role"], "seems": "hostile" if n["hostile"] else attitude(n["disposition"]),
                 "met_before": n["met"]}
     here_items = {i["id"]: item_info(i["id"], g)["name"] for i in loc["items"]}
     iid = match(target, here_items) or match(target, inventory_options(g))
