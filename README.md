@@ -14,9 +14,18 @@ The first version was a Streamlit app where five agents passed a JSON file aroun
 
 - Type what you do, tap one of the suggestion chips, or press the mic and say it.
 - **Exploring**: move around, look at things, pick things up. Exits, people and items show up as chips above the input. The map, character sheet and journal are in the side panel (the menu button on a phone).
-- **Talking**: tap "Talk to Maren" (or just say you go and talk to her) and the screen switches to a conversation with her portrait, how much she likes you, and three suggested replies. What you say changes her opinion of you. Be nice and she might tell you things or give you work. Push someone too far and they'll go for you, which starts a fight.
+- **Talking**: tap "Talk to the innkeeper" (or just say you go and talk to her) and the screen switches to a conversation with her portrait, how much she likes you, and three suggested replies. What you say changes her opinion of you. Be nice and she might tell you things or give you work. Push someone too far and they'll go for you, which starts a fight.
 - **Fighting**: HP bars at the top, big action buttons at the bottom: Attack, Defend, Item, Power Strike, Second Wind, any abilities you've picked up, and Flee. Tap an enemy's bar to target it. Every roll shows in the log with the numbers, and the Game Master narrates what happened. Win and you get XP and loot. Lose and you can load a save.
 - Saving is the disk button at the top. The Gutter Lantern rents beds for 5 gold if you need to heal up.
+- **Objectives**: every quest is broken into steps, like "Speak to Corwin Vane", "Defeat the Ash Wolves 0/2" and "Return to the innkeeper". The current step is pinned under the location bar, and tapping it opens the journal, where each quest has its checklist. Steps tick off by themselves as you play, and you get a toast when one is done.
+- **Gains and losses**: when you pick something up, earn coin or XP, or get a quest item, a little icon flies from the story into the bag button with a "+" label, and the bag gets a badge. Losing something (spending money, using a potion, handing an item over) sends it back out with a "-". The money is named to suit the world, so Emberfall uses gold and a premise world might use shells or scrip. If your phone or computer is set to reduce motion, the label just appears by the bag instead.
+- **Map**: the map tab draws every place you've found and the roads between them. Drag to pan, pinch or scroll to zoom, and tap a place to see who's there. You're the gold dot, places you haven't been to are dashed, lairs have a red ring and a crown, places you're not ready for have a lock and the level they need, and a "?" means there's a way out you haven't explored. The people you've met show as small portraits above each place.
+- **Names**: you don't know anyone's name until you learn it. The innkeeper is "the innkeeper" until she tells you who she is or someone else mentions her, and then you get a "You learned: Maren Holt" toast and the name sticks. The Game Master is told which names you know, and anything it or a tool says is masked on the way out in case it slips. Places named after someone, like Brannoc's Forge, count as already knowing them. Old saves treat everyone as known.
+
+| Objectives | Something going into the bag | The map | A stranger |
+| --- | --- | --- | --- |
+| ![Objectives](docs/11-objectives.png) | ![Item flying to the bag](docs/12-item-fly.png) | ![Map](docs/13-map.png) | ![Stranger](docs/14-stranger.png) |
+| ![Phone objectives](docs/m11-objectives.png) | ![Phone item flying to the bag](docs/m12-item-fly.png) | ![Phone map](docs/m13-map.png) | ![Phone stranger](docs/m14-stranger.png) |
 
 | Talking | Fighting | After the fight |
 | --- | --- | --- |
@@ -178,7 +187,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-There are 144 tests. They cover the dice, combat rules (initiative, hits, crits, Defend, status effects, abilities, items, fleeing, victory, defeat, loot and levelling), moving between the three modes, building a world from a premise (and falling back when that fails), the forge (budgets, clamping, repair, abilities, loot tables, the enemy AI), a short balance run, the boss lair and its gate, the starting kit, topping up short openings and renaming stock names, what the Game Master is told (new or loaded game, NPC lines, combat facts) and the guards on what it says, NPC disposition, secrets, quests, trading and hostility, the ADK tools with the Dialogue and Creator agents faked, saving and loading, the HTTP endpoints and the quota fallbacks. Gemini is never called, and the key is removed from the environment during the run so nothing can reach it by accident. Coverage of the engine modules is around 90%.
+There are 171 tests. They cover the dice, combat rules (initiative, hits, crits, Defend, status effects, abilities, items, fleeing, victory, defeat, loot and levelling), moving between the three modes, building a world from a premise (and falling back when that fails), the forge (budgets, clamping, repair, abilities, loot tables, the enemy AI), a short balance run, the boss lair and its gate, the starting kit, topping up short openings and renaming stock names, what the Game Master is told (new or loaded game, NPC lines, combat facts) and the guards on what it says, NPC disposition, secrets, quests, trading and hostility, the ADK tools with the Dialogue and Creator agents faked, saving and loading, the HTTP endpoints, the quota fallbacks, quest objectives and how they tick off, and keeping names hidden until you learn them (including old saves). Gemini is never called, and the key is removed from the environment during the run so nothing can reach it by accident. Coverage of the engine modules is around 90%.
 
 ## Known limitations
 
@@ -191,6 +200,7 @@ There are 144 tests. They cover the dice, combat rules (initiative, hits, crits,
 - Openings are cached by premise to save quota, so typing exactly the same premise again gives you the same world. Change a word to get a new one.
 - Generated content is still built from a fixed set of archetypes and blocks, so a premise world plays differently but won't invent a brand new mechanic.
 - The balance numbers come from the simulator, not from lots of real people playing. A reckless player will lose more often.
+- Hiding names relies on masking text after the fact. A nickname or a misspelling the model invents won't be caught, and because the voice is already spoken by then, you might hear a name before you've learned it even though the screen hides it.
 - Names are much better but not perfect. Only people's names are remembered between worlds, so two similar premises can still get the same item name (two of my lighthouse worlds both started with a Rust-Bitten Harpoon). Made-up replacement names, used when the model's rename fails, can sound a bit odd.
 - The guards on the Game Master only fix the text. By the time a bad line is caught, the voice has already said it, so a made-up resistance gets a "Rules check" note rather than going unsaid. The check only looks for resistance and weakness claims, not every number.
 - The boss route waits for level 2, but if you wander the opening for long enough you'll get there before finishing the first job. That's fine, but then the journal points the way only once the job is done.
